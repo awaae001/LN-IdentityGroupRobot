@@ -79,11 +79,11 @@ class RoleAssigner(commands.Cog):
     @app_commands.command(name="assign_roles", description="批量为用户分配身份组(可同时分配两个身份组)。")
     @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
     @app_commands.describe(
-        role_id_str="要分配的第一个身份组 ID",
-        role_id_str_1="要分配的第二个身份组 ID (可选)",
-        role_id_str_2="要分配的第三个身份组 ID (可选)",
-        user_ids_str="用户 ID 列表 (可选, 如果提供了消息链接)",
-        message_link="包含用户提及的消息链接 (可选)"
+        role_id_str="第一个要分配的身份组ID",
+        role_id_str_1="第二个要分配的身份组ID (可选)",
+        role_id_str_2="第三个要分配的身份组ID (可选)", 
+        user_ids_str="用户ID列表，多个ID用逗号分隔 (可选)",
+        message_link="包含@用户的消息链接 (可选)"
     )
     @is_authorized() # 应用新的自定义权限检查
     async def assign_roles(self, interaction: Interaction, role_id_str: str, role_id_str_1: str = None, role_id_str_2: str = None, user_ids_str: str = None, message_link: str = None):
@@ -118,9 +118,7 @@ class RoleAssigner(commands.Cog):
         elif isinstance(error, app_commands.CommandInvokeError):
             original_error = error.original
             error_message = f"命令执行中发生内部错误: {original_error}"
-            # 可以在这里添加更具体的错误处理逻辑
 
-        # 尝试发送错误消息（仅对非 CheckFailure 错误）
         try:
             if not interaction.response.is_done():
                 await interaction.response.send_message(error_message, ephemeral=True)

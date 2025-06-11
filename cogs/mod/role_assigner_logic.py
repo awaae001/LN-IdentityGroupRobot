@@ -5,6 +5,7 @@ import re
 import config
 import json
 import os
+import random
 from datetime import datetime
 
 logger = logging.getLogger('discord_bot.cogs.role_assigner_logic')
@@ -45,12 +46,12 @@ def _save_assignment_log(log_data):
     except IOError as e:
         logger.error(f"无法写入分配日志文件 {ASSIGNMENT_LOG_FILE}: {e}")
 
-import random
 
 async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_ids_str: str = None, message_link: str = None, role_id_str_1: str = None, role_id_str_2: str = None):
     """
     处理批量分配身份组的核心逻辑。
     """
+    user_ids = []  # 初始化用户ID列表
     guild = interaction.guild
     all_guilds = interaction.client.guilds
     role_status = {}
@@ -81,17 +82,119 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
 
     # 检查所有服务器中的身份组状态
     all_valid = all(not status["invalid"] for status in role_status.values())
-    if not all_valid:
-        await interaction.response.defer(ephemeral=True)
-        response = "身份组验证结果：\n"
-        for gid, status in role_status.items():
-            response += f"\n服务器: {status['name']} ({gid})\n"
-            if status["valid"]:
-                response += f"✅ 有效身份组: {', '.join(status['valid'])}\n"
-            if status["invalid"]:
-                response += f"❌ 无效身份组ID: {', '.join(status['invalid'])}\n"
+    await interaction.response.defer(ephemeral=not all_valid)
+    
+    # 创建验证结果Embed
+    verify_embed = discord.Embed(
+        title="身份组验证结果",
+        color=discord.Color.blue()
+    )
+    
+    for gid, status in role_status.items():
+        field_value = ""
+        if status["valid"]:
+            field_value += f"✅ 有效身份组: {', '.join(status['valid'])}\n"
+        if status["invalid"]:
+            field_value += f"❌ 无效身份组ID: {', '.join(status['invalid'])}\n"
         
-        await interaction.followup.send(response, ephemeral=True)
+        if field_value:
+            verify_embed.add_field(
+                name=f"服务器: {status['name']} ({gid})",
+                value=field_value,
+                inline=False
+            )
+    
+    # 创建确认Embed
+    confirm_embed = discord.Embed(
+        title="身份组分配确认",
+        description="即将执行以下身份组分配操作",
+        color=discord.Color.orange()
+    )
+    
+    # 添加角色信息
+    role_info = []
+    for g in all_guilds:
+        current_roles = []
+        for rid_str in [role_id_str, role_id_str_1, role_id_str_2]:
+            if rid_str:
+                try:
+                    role = g.get_role(int(rid_str))
+                    if role:
+                        current_roles.append(role)
+                except ValueError:
+                    continue
+        
+        if current_roles:
+            role_info.append(
+                f"**{g.name}**: " + 
+                ", ".join([f'"{r.name}" ({r.id})' for r in current_roles])
+            )
+    
+    if role_info:
+        confirm_embed.add_field(
+            name="分配的身份组",
+            value="\n".join(role_info),
+            inline=False
+        )
+    
+    # 创建确认按钮
+    class ConfirmButton(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+            self.confirmed = False
+        
+        @discord.ui.button(label="确认", style=discord.ButtonStyle.green)
+        async def confirm(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message(
+                    "只有发起命令的用户可以确认操作", 
+                    ephemeral=True
+                )
+                return
+            
+            await confirm_msg.delete()
+
+            await button_interaction.response.send_message(
+                "处理中...", 
+                ephemeral=True,
+                delete_after=5  
+            )
+            
+            self.confirmed = True
+            self.stop()
+        
+        @discord.ui.button(label="取消", style=discord.ButtonStyle.red)
+        async def cancel(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+            if button_interaction.user.id != interaction.user.id:
+                await button_interaction.response.send_message(
+                    "只有发起命令的用户可以取消操作", 
+                    ephemeral=True
+                )
+                return
+            
+            await button_interaction.response.send_message(
+                "操作已取消",
+                ephemeral=True
+            )
+            await confirm_msg.delete()
+
+                
+            self.stop()
+
+    await interaction.followup.send(embed=verify_embed, ephemeral=not all_valid)
+
+    # 然后发送确认请求
+    view = ConfirmButton()
+    confirm_msg = await interaction.followup.send(
+        embed=confirm_embed,
+        view=view,
+        wait=True
+    )
+
+    await view.wait()
+
+    if not view.confirmed:
+        return
 
     roles = []
     user_ids = []
@@ -115,7 +218,7 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
 
         try:
             channel = guild.get_channel(channel_id) or await guild.fetch_channel(channel_id)
-            if not isinstance(channel, discord.TextChannel): # 确保是文本频道
+            if not isinstance(channel, discord.TextChannel): 
                  await interaction.followup.send("错误：消息链接指向的不是有效的文本频道。", ephemeral=True)
                  return
             message = await channel.fetch_message(message_id)
@@ -161,8 +264,6 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
     if not user_ids:
         await interaction.response.send_message("错误：未能提取到任何有效的用户 ID。", ephemeral=True)
         return
-    if all_valid:
-        await interaction.response.defer(ephemeral=False)
 
     all_assigned = []
     all_failed = []
@@ -254,17 +355,54 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
         except Exception as e:
             logger.error(f"保存分配日志时出错: {e}", exc_info=True)
 
-    # 构建响应消息
-    role_info = "\n".join([f'- "{r.name}" ({r.id})' for r in roles])
-    response = f'跨服务器身份组分配完成：\n分配的身份组：\n{role_info}\n'
+    # 构建ED样式响应消息
+    embed = discord.Embed(
+        title="跨服务器身份组分配完成",
+        color=discord.Color.green()
+    )
+    
+    if roles:
+        embed.add_field(
+            name="分配的身份组",
+            value="\n".join([f'- "{r.name}" ({r.id})' for r in roles]),
+            inline=False
+        )
     
     if all_assigned:
-        response += f'\n成功分配的用户：\n- ' + '\n- '.join(all_assigned)
+        embed.add_field(
+            name=f"成功分配的用户 ({len(all_assigned)})",
+            value="\n".join([f'- {user}' for user in all_assigned]),
+            inline=False
+        )
+    
     if all_failed:
-        response += f'\n\n分配失败的情况：\n- ' + '\n- '.join(all_failed)
-
-    if len(response) > 2000:
-        summary = f'跨服务器身份组分配完成。\n成功: {len(all_assigned)}, 失败: {len(all_failed)}。\n详情请查看机器人控制台日志。'
-        await interaction.followup.send(summary)
+        embed.add_field(
+            name=f"分配失败的情况 ({len(all_failed)})",
+            value="\n".join([f'- {fail}' for fail in all_failed]),
+            inline=False
+        )
+    
+    # 检查Embed长度是否超过限制
+    if len(embed) > 6000:
+        summary = discord.Embed(
+            title="跨服务器身份组分配完成",
+            description=f"成功: {len(all_assigned)}, 失败: {len(all_failed)}。\n详情请查看机器人控制台日志。",
+            color=discord.Color.green()
+        )
+        try:
+            if interaction.channel:  # 确保频道存在
+                await interaction.channel.send(embed=summary)
+            else:
+                raise AttributeError("无法获取交互频道")
+        except (discord.Forbidden, AttributeError) as e:
+            logger.error(f"无法在频道发送消息: {str(e)}")
+            await interaction.followup.send("操作已完成，但无法在原始频道发送结果", ephemeral=True)
     else:
-        await interaction.followup.send(response)
+        try:
+            if interaction.channel:  # 确保频道存在
+                await interaction.channel.send(embed=embed)
+            else:
+                raise AttributeError("无法获取交互频道")
+        except (discord.Forbidden, AttributeError) as e:
+            logger.error(f"无法在频道发送消息: {str(e)}")
+            await interaction.followup.send("操作已完成，但无法在原始频道发送结果", ephemeral=True)
