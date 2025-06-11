@@ -1,0 +1,270 @@
+import discord
+from discord import Interaction
+import logging
+import re
+import config
+import json
+import os
+from datetime import datetime
+
+logger = logging.getLogger('discord_bot.cogs.role_assigner_logic')
+
+DATA_DIR = "data"
+ASSIGNMENT_LOG_FILE = os.path.join(DATA_DIR, "role_assignments.json")
+
+def _ensure_data_dir():
+    """确保数据目录存在"""
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
+
+def _load_assignment_log():
+    """加载分配日志"""
+    _ensure_data_dir()
+    try:
+        # 使用 'a+' 模式打开文件，如果文件不存在则创建
+        with open(ASSIGNMENT_LOG_FILE, 'a+', encoding='utf-8') as f:
+            f.seek(0)
+            content = f.read()
+            if not content: # 如果文件是空的
+                return []
+            return json.loads(content) # 解析内容
+    except json.JSONDecodeError:
+         logger.error(f"无法解析分配日志文件 {ASSIGNMENT_LOG_FILE}，将返回空列表。")
+         return [] # 如果文件内容无效，返回空列表
+    except IOError as e:
+        logger.error(f"读取分配日志文件 {ASSIGNMENT_LOG_FILE} 时出错: {e}")
+        return []
+
+
+def _save_assignment_log(log_data):
+    """保存分配日志"""
+    _ensure_data_dir()
+    try:
+        with open(ASSIGNMENT_LOG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(log_data, f, ensure_ascii=False, indent=4)
+    except IOError as e:
+        logger.error(f"无法写入分配日志文件 {ASSIGNMENT_LOG_FILE}: {e}")
+
+import random
+
+async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_ids_str: str = None, message_link: str = None, role_id_str_1: str = None, role_id_str_2: str = None):
+    """
+    处理批量分配身份组的核心逻辑。
+    """
+    guild = interaction.guild
+    all_guilds = interaction.client.guilds
+    role_status = {}
+    operation_id = str(random.randint(1000, 9999))  # 生成4位随机操作ID
+    operation_timestamp = datetime.now().isoformat()
+    
+    for g in all_guilds:
+        invalid_in_guild = []
+        valid_in_guild = []
+        for rid_str in [role_id_str, role_id_str_1, role_id_str_2]:
+            if not rid_str:
+                continue
+            try:
+                role_id = int(rid_str)
+                role = g.get_role(role_id)
+                if role:
+                    valid_in_guild.append(f"{role.name} ({role.id})")
+                else:
+                    invalid_in_guild.append(rid_str)
+            except ValueError:
+                invalid_in_guild.append(rid_str)
+        
+        role_status[g.id] = {
+            "valid": valid_in_guild,
+            "invalid": invalid_in_guild,
+            "name": g.name
+        }
+
+    # 检查所有服务器中的身份组状态
+    all_valid = all(not status["invalid"] for status in role_status.values())
+    if not all_valid:
+        await interaction.response.defer(ephemeral=True)
+        response = "身份组验证结果：\n"
+        for gid, status in role_status.items():
+            response += f"\n服务器: {status['name']} ({gid})\n"
+            if status["valid"]:
+                response += f"✅ 有效身份组: {', '.join(status['valid'])}\n"
+            if status["invalid"]:
+                response += f"❌ 无效身份组ID: {', '.join(status['invalid'])}\n"
+        
+        await interaction.followup.send(response, ephemeral=True)
+
+    roles = []
+    user_ids = []
+    invalid_ids = []
+
+    if message_link:
+        # 解析消息链接并提取用户 ID
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        
+        match = re.match(r'https://discord\.com/channels/(\d+)/(\d+)/(\d+)', message_link)
+        if not match:
+            await interaction.followup.send("错误：提供的消息链接格式无效。", ephemeral=True)
+            return
+
+        link_guild_id, channel_id, message_id = map(int, match.groups())
+
+        if link_guild_id != guild.id:
+             await interaction.followup.send("错误：消息链接指向的服务器与当前服务器不符。", ephemeral=True)
+             return
+
+        try:
+            channel = guild.get_channel(channel_id) or await guild.fetch_channel(channel_id)
+            if not isinstance(channel, discord.TextChannel): # 确保是文本频道
+                 await interaction.followup.send("错误：消息链接指向的不是有效的文本频道。", ephemeral=True)
+                 return
+            message = await channel.fetch_message(message_id)
+        except discord.NotFound:
+            await interaction.followup.send("错误：无法找到消息链接对应的频道或消息。", ephemeral=True)
+            return
+        except discord.Forbidden:
+             await interaction.followup.send("错误：机器人没有权限访问该消息所在的频道。", ephemeral=True)
+             return
+        except Exception as e:
+            logger.error(f"获取消息时出错 ({message_link}): {e}", exc_info=True)
+            await interaction.followup.send("错误：获取消息时发生未知错误。", ephemeral=True)
+            return
+
+        # 从消息内容中提取用户提及
+        mentioned_user_ids_raw = re.findall(r'<@!?(\d+)>', message.content)
+        if not mentioned_user_ids_raw:
+             await interaction.followup.send("错误：在指定的消息中未找到任何用户提及。", ephemeral=True)
+             return
+
+        for uid_str in mentioned_user_ids_raw:
+             try:
+                 user_ids.append(int(uid_str))
+             except ValueError:
+                 # 理论上正则保证了是数字，但以防万一
+                 invalid_ids.append(uid_str)
+
+    elif user_ids_str:
+        # 从提供的字符串中解析用户 ID
+        user_ids_raw = re.findall(r'\d+', user_ids_str)
+        for uid_str in user_ids_raw:
+            try:
+                user_ids.append(int(uid_str))
+            except ValueError:
+                invalid_ids.append(uid_str)
+    else:
+        # 如果两者都未提供
+        await interaction.response.send_message("错误：请提供用户 ID 列表或有效的消息链接。", ephemeral=True)
+        return
+
+    # 去重
+    user_ids = list(set(user_ids))
+    if not user_ids:
+        await interaction.response.send_message("错误：未能提取到任何有效的用户 ID。", ephemeral=True)
+        return
+    if all_valid:
+        await interaction.response.defer(ephemeral=False)
+
+    all_assigned = []
+    all_failed = []
+    all_log_entries = []
+
+    # 在所有服务器中分配身份组
+    for g in all_guilds:
+        # 获取当前服务器的角色
+        current_roles = []
+        for rid_str in [role_id_str, role_id_str_1, role_id_str_2]:
+            if not rid_str:
+                continue
+            try:
+                role_id = int(rid_str)
+                role = g.get_role(role_id)
+                if role:
+                    current_roles.append(role)
+            except ValueError:
+                continue
+        
+        # 跳过没有有效身份组的服务器
+        if not current_roles:
+            continue
+
+        # 检查机器人权限
+        bot_member = g.get_member(interaction.client.user.id)
+        if not bot_member:
+            continue
+            
+        for role in current_roles:
+            if bot_member.top_role <= role:
+                all_failed.append(f'{g.name}: 权限不足无法分配 {role.name} ({role.id})')
+                continue
+
+        assigned_users = []
+        failed_users = []
+        successfully_assigned_ids = []
+
+        for user_id in user_ids:
+            try:
+                member = await g.fetch_member(user_id)
+                if member:
+                    await member.add_roles(*current_roles)
+                    role_names = ", ".join([f'"{r.name}" ({r.id})' for r in current_roles])
+                    assigned_users.append(f'{g.name}: {member.name}#{member.discriminator} ({member.id})')
+                    successfully_assigned_ids.append(member.id)
+                    logger.info(f'在服务器 {g.name} 成功为 {member.name} 分配了 {role_names} 身份组。')
+            except discord.NotFound:
+                failed_users.append(f'{g.name}: {user_id} (未找到)')
+                logger.warning(f'在服务器 {g.name} 未找到 ID 为 {user_id} 的用户。')
+            except discord.Forbidden:
+                failed_users.append(f'{g.name}: {user_id} (权限不足)')
+                logger.error(f'在服务器 {g.name} 机器人权限不足，无法为 ID 为 {user_id} 的用户分配身份组。')
+            except Exception as e:
+                failed_users.append(f'{g.name}: {user_id} (未知错误: {e})')
+                logger.error(f'在服务器 {g.name} 为 ID 为 {user_id} 的用户分配身份组时发生未知错误: {e}', exc_info=True)
+
+        if successfully_assigned_ids:
+            all_log_entries.append({
+                "guild_id": g.id,
+                "guild_name": g.name,
+                "role_ids": [r.id for r in current_roles],
+                "role_names": [r.name for r in current_roles],
+                "timestamp": operation_timestamp,
+                "assigned_user_ids": successfully_assigned_ids,
+                "operation_id": operation_id
+            })
+        
+        all_assigned.extend(assigned_users)
+        all_failed.extend(failed_users)
+
+    # 保存所有分配日志
+    if all_log_entries:
+        try:
+            log_data = _load_assignment_log()
+            operation_entry = [
+                operation_id,
+                {
+                    "operation_id": operation_id,
+                    "timestamp": int(datetime.now().timestamp()),
+                    "data": all_log_entries
+                }
+            ]
+            if not isinstance(log_data, list):
+                log_data = []
+            log_data.append(operation_entry)
+            _save_assignment_log(log_data)
+            logger.info(f"已将操作ID {operation_id} 的 {len(all_log_entries)} 条跨服务器分配记录保存到 {ASSIGNMENT_LOG_FILE}")
+        except Exception as e:
+            logger.error(f"保存分配日志时出错: {e}", exc_info=True)
+
+    # 构建响应消息
+    role_info = "\n".join([f'- "{r.name}" ({r.id})' for r in roles])
+    response = f'跨服务器身份组分配完成：\n分配的身份组：\n{role_info}\n'
+    
+    if all_assigned:
+        response += f'\n成功分配的用户：\n- ' + '\n- '.join(all_assigned)
+    if all_failed:
+        response += f'\n\n分配失败的情况：\n- ' + '\n- '.join(all_failed)
+
+    if len(response) > 2000:
+        summary = f'跨服务器身份组分配完成。\n成功: {len(all_assigned)}, 失败: {len(all_failed)}。\n详情请查看机器人控制台日志。'
+        await interaction.followup.send(summary)
+    else:
+        await interaction.followup.send(response)
