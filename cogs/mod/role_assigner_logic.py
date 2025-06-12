@@ -2,6 +2,7 @@ import discord
 from discord import Interaction
 import logging
 import re
+from config import GUILD_IDS
 import config
 import json
 import os
@@ -53,7 +54,7 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
     """
     user_ids = []  # 初始化用户ID列表
     guild = interaction.guild
-    all_guilds = interaction.client.guilds
+    all_guilds = [g for g in interaction.client.guilds if g.id in GUILD_IDS]
     role_status = {}
     operation_id = str(random.randint(1000, 9999))  # 生成4位随机操作ID
     operation_timestamp = datetime.now().isoformat()
