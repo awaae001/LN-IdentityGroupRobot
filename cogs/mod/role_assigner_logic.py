@@ -26,12 +26,12 @@ def _load_assignment_log():
         with open(ASSIGNMENT_LOG_FILE, 'a+', encoding='utf-8') as f:
             f.seek(0)
             content = f.read()
-            if not content: # 如果文件是空的
+            if not content:
                 return []
-            return json.loads(content) # 解析内容
+            return json.loads(content) 
     except json.JSONDecodeError:
          logger.error(f"无法解析分配日志文件 {ASSIGNMENT_LOG_FILE}，将返回空列表。")
-         return [] # 如果文件内容无效，返回空列表
+         return [] 
     except IOError as e:
         logger.error(f"读取分配日志文件 {ASSIGNMENT_LOG_FILE} 时出错: {e}")
         return []
@@ -243,7 +243,6 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
              try:
                  user_ids.append(int(uid_str))
              except ValueError:
-                 # 理论上正则保证了是数字，但以防万一
                  invalid_ids.append(uid_str)
 
     elif user_ids_str:
@@ -308,7 +307,7 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
                 if member:
                     await member.add_roles(*current_roles)
                     role_names = ", ".join([f'"{r.name}" ({r.id})' for r in current_roles])
-                    assigned_users.append(f'{g.name}: {member.name}#{member.discriminator} ({member.id})')
+                    assigned_users.append(f'{g.name}: {member.name}#{member.discriminator}')
                     successfully_assigned_ids.append(member.id)
                     logger.info(f'在服务器 {g.name} 成功为 {member.name} 分配了 {role_names} 身份组。')
             except discord.NotFound:
@@ -355,54 +354,79 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
         except Exception as e:
             logger.error(f"保存分配日志时出错: {e}", exc_info=True)
 
-    # 构建ED样式响应消息
-    embed = discord.Embed(
-        title="跨服务器身份组分配完成",
-        color=discord.Color.green()
-    )
-    
-    if roles:
-        embed.add_field(
-            name="分配的身份组",
-            value="\n".join([f'- "{r.name}" ({r.id})' for r in roles]),
-            inline=False
-        )
-    
-    if all_assigned:
-        embed.add_field(
-            name=f"成功分配的用户 ({len(all_assigned)})",
-            value="\n".join([f'- {user}' for user in all_assigned]),
-            inline=False
-        )
-    
-    if all_failed:
-        embed.add_field(
-            name=f"分配失败的情况 ({len(all_failed)})",
-            value="\n".join([f'- {fail}' for fail in all_failed]),
-            inline=False
-        )
-    
-    # 检查Embed长度是否超过限制
-    if len(embed) > 6000:
-        summary = discord.Embed(
-            title="跨服务器身份组分配完成",
-            description=f"成功: {len(all_assigned)}, 失败: {len(all_failed)}。\n详情请查看机器人控制台日志。",
+    # 构建响应消息
+    try:
+        # 先检查总embed长度
+        if len(all_assigned) > 50 or len(all_failed) > 20:
+            summary = discord.Embed(
+                title="跨服务器身份组分配完成",
+                description=f"成功: {len(all_assigned)}, 失败: {len(all_failed)}。\n详情请查看机器人控制台日志。",
+                color=discord.Color.green()
+            )
+            await interaction.channel.send(embed=summary)
+            # 同时发送到日志频道
+            if config.LOG_CHANNEL_ID:
+                log_channel = interaction.client.get_channel(int(config.LOG_CHANNEL_ID))
+                if log_channel:
+                    await log_channel.send(embed=summary)
+            return
+
+        # 构建详细embeds
+        success_embed = discord.Embed(
+            title="跨服务器身份组分配 - 成功情况",
             color=discord.Color.green()
         )
-        try:
-            if interaction.channel:  # 确保频道存在
-                await interaction.channel.send(embed=summary)
-            else:
-                raise AttributeError("无法获取交互频道")
-        except (discord.Forbidden, AttributeError) as e:
-            logger.error(f"无法在频道发送消息: {str(e)}")
-            await interaction.followup.send("操作已完成，但无法在原始频道发送结果", ephemeral=True)
-    else:
-        try:
-            if interaction.channel:  # 确保频道存在
-                await interaction.channel.send(embed=embed)
-            else:
-                raise AttributeError("无法获取交互频道")
-        except (discord.Forbidden, AttributeError) as e:
-            logger.error(f"无法在频道发送消息: {str(e)}")
-            await interaction.followup.send("操作已完成，但无法在原始频道发送结果", ephemeral=True)
+        
+        if roles:
+            role_value = "\n".join([f'- "{r.name}" ({r.id})' for r in roles])
+            if len(role_value) > 1024:
+                role_value = role_value[:1000] + "\n... (内容过长，已截断)"
+            success_embed.add_field(
+                name="分配的身份组",
+                value=role_value,
+                inline=False
+            )
+        
+        if all_assigned:
+            assigned_value = "\n".join([f'- {user}' for user in all_assigned])
+            if len(assigned_value) > 1024:
+                assigned_value = assigned_value[:1000] + "\n... (内容过长，已截断)"
+            success_embed.add_field(
+                name=f"成功分配的用户 ({len(all_assigned)})",
+                value=assigned_value,
+                inline=False
+            )
+        
+        if all_failed:
+            fail_embed = discord.Embed(
+                title="跨服务器身份组分配 - 失败情况",
+                color=discord.Color.red()
+            )
+            failed_value = "\n".join([f'- {fail}' for fail in all_failed])
+            if len(failed_value) > 1024:
+                failed_value = failed_value[:1000] + "\n... (内容过长，已截断)"
+            fail_embed.add_field(
+                name=f"分配失败的情况 ({len(all_failed)})",
+                value=failed_value,
+                inline=False
+            )
+            await interaction.channel.send(embed=fail_embed)
+            # 同时发送到日志频道
+            if config.LOG_CHANNEL_ID:
+                log_channel = interaction.client.get_channel(int(config.LOG_CHANNEL_ID))
+                if log_channel:
+                    await log_channel.send(embed=fail_embed)
+        
+        await interaction.channel.send(embed=success_embed)
+        # 同时发送到日志频道
+        if config.LOG_CHANNEL_ID:
+            log_channel = interaction.client.get_channel(int(config.LOG_CHANNEL_ID))
+            if log_channel:
+                await log_channel.send(embed=success_embed)
+        
+    except discord.HTTPException as e:
+        logger.error(f"发送embed时出错: {str(e)}")
+        await interaction.followup.send("操作已完成，但发送结果时出错", ephemeral=True)
+    except Exception as e:
+        logger.error(f"发送结果时发生未知错误: {str(e)}")
+        await interaction.followup.send("操作已完成，但发送结果时发生错误", ephemeral=True)
