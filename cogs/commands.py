@@ -4,6 +4,7 @@ from discord import app_commands, Interaction
 import logging
 import config
 from .mod.role_assigner_logic import handle_assign_roles
+from .mod import status_utils
 
 logger = logging.getLogger('discord_bot.cogs.role_assigner')
 
@@ -32,8 +33,6 @@ def is_authorized():
             logger.debug(f"管理员用户 {interaction.user.name} ({user_id_str}) 通过权限检查。")
             return True
  
-        # 检查是否拥有授权身份组 (从 config 读取)
-        # 直接使用 config.AUTHORIZED_ROLE_IDS
         if config.AUTHORIZED_ROLE_IDS: 
             member = guild.get_member(interaction.user.id) # 获取成员对象以检查角色
             if member and member.roles:
@@ -85,15 +84,16 @@ class RoleAssigner(commands.Cog):
         user_ids_str="用户ID列表，多个ID用逗号分隔 (可选)",
         message_link="包含@用户的消息链接 (可选)"
     )
-    @is_authorized() # 应用新的自定义权限检查
+    @is_authorized() 
     async def assign_roles(self, interaction: Interaction, role_id_str: str, role_id_str_1: str = None, role_id_str_2: str = None, user_ids_str: str = None, message_link: str = None):
-        """
-        批量为指定用户分配身份组 (Cog 版本，使用 ID)。
-        可以从提供的用户 ID 字符串或消息链接中获取用户。
-        """
-        # 调用分离的逻辑处理函数
+
         await handle_assign_roles(interaction, role_id_str, user_ids_str, message_link, role_id_str_1, role_id_str_2)
 
+    @app_commands.command(name="status", description="显示系统和机器人状态")
+    async def status_command(self, interaction: discord.Interaction):
+        """显示系统和机器人状态"""
+        await status_utils.handle_status_command(interaction, self.bot)
+        
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError):
         """处理 Cog 内应用程序命令的错误"""
@@ -101,19 +101,16 @@ class RoleAssigner(commands.Cog):
         if interaction.command is None or interaction.command.name != 'assign_roles':
              return
 
-        # 特别处理 CheckFailure，因为 is_authorized 已经发送了消息
+        
         if isinstance(error, app_commands.CheckFailure):
             logger.info(f"命令 /{interaction.command.name} 的权限检查失败，用户: {interaction.user.name} ({interaction.user.id})。已由 is_authorized 处理。")
             # 不需要再发送通用错误消息，因为 is_authorized 应该已经发送了具体的权限错误
             return
-
-        # 处理其他类型的错误
+        
         logger.error(f"Cog 'RoleAssigner' 中的命令 /{interaction.command.name} 发生错误: {error}", exc_info=True)
         error_message = "执行命令时发生未知错误。"
 
         if isinstance(error, app_commands.MissingPermissions):
-            # 这个分支理论上不应该被触发，因为 is_authorized 覆盖了权限检查
-            # 但保留以防万一
             error_message = '错误：你没有足够的权限来执行此命令。'
         elif isinstance(error, app_commands.CommandInvokeError):
             original_error = error.original

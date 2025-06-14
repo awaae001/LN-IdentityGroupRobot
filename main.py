@@ -77,7 +77,6 @@ async def setup_hook():
                 except Exception as e:
                     logger.error(f'加载 Cog "{cog_name}" 时发生未知错误: {e}', exc_info=True)
 
-# 将 setup_hook 附加到 bot
 bot.setup_hook = setup_hook
 
 
