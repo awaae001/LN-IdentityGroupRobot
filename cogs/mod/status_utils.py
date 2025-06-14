@@ -31,7 +31,7 @@ async def build_status_embed(bot_instance) -> discord.Embed:
     embed.add_field(name="🧠 主机 RAM", value=f"{system_status['ram_usage']}%", inline=True)
     embed.add_field(name=" ", value=" ", inline=True)
     
-    embed.add_field(name="<:logosdiscordicon:1381133861874044938> Discord 延迟", 
+    embed.add_field(name="<:logosdiscordicon:1383323627579244664> Discord 延迟", 
                    value=f"{dc_latency} ms" if isinstance(dc_latency, int) else dc_latency, 
                    inline=True)
     
