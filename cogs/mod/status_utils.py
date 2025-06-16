@@ -37,7 +37,7 @@ async def build_status_embed(bot_instance) -> discord.Embed:
     
     
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z")
-    embed.set_footer(text=f"枫叶 · 系统状态丨查询时间: {timestamp}")
+    embed.set_footer(text=f"枫叶 · 系统状态丨查询时间: {timestamp} · 60S 后消失")
     
     return embed
 
@@ -46,8 +46,10 @@ async def handle_status_command(interaction: discord.Interaction, bot_instance):
     
     try:
         embed = await build_status_embed(bot_instance)
-        await interaction.followup.send(embed=embed)
+        msg = await interaction.followup.send(embed=embed)
         logger.info(f"用户 {interaction.user} 查询了状态")
+        
+        await msg.delete(delay=60)
     except Exception as e:
         logger.error(f"处理状态命令时出错: {e}")
         await interaction.followup.send("❌ 获取状态信息时出错", ephemeral=True)

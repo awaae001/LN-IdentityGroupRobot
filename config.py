@@ -30,7 +30,6 @@ LOG_CHANNEL_ID = os.getenv('LOG_CHANNEL_ID')
 
 # 处理服务器ID
 GUILD_IDS = []
-GUILD_ID = None  # 保持向后兼容
 
 if GUILD_IDS_STR:
     try:
@@ -49,9 +48,7 @@ else:
 REPLACEMENT_ROLES_JSON = os.getenv('REPLACEMENT_ROLES', '{}') # Default to empty JSON object
 REPLACEMENT_ROLES = {}
 try:
-    # 解析 JSON 字符串
     raw_replacement_roles = json.loads(REPLACEMENT_ROLES_JSON)
-    # 验证并转换键和值为整数
     for guild_id_str, role_id_str in raw_replacement_roles.items():
         try:
             guild_id = int(guild_id_str)
