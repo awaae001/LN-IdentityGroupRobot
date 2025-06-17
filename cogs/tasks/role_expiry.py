@@ -19,8 +19,8 @@ logger = logging.getLogger('discord_bot.cogs.tasks.role_expiry')
 logger.setLevel(logging.DEBUG)  # 确保日志级别为DEBUG
 
 # 定义过期时间（15天）
-EXPIRY_DURATION_SECONDS = 30 * 24 * 60 * 60
-# EXPIRY_DURATION_SECONDS = 60 # 测试用：设置为 1 分钟
+# EXPIRY_DURATION_SECONDS = 30 * 24 * 60 * 60
+EXPIRY_DURATION_SECONDS = 60 # 测试用：设置为 1 分钟
 
 class RoleExpiryTask(commands.Cog):
     """
@@ -33,8 +33,9 @@ class RoleExpiryTask(commands.Cog):
     def cog_unload(self):
         self.check_expired_roles.cancel()
 
-    @tasks.loop(hours=1.0) # 每小时检查一次
+    # @tasks.loop(hours=1.0) 
     # @tasks.loop(minutes=1.0) # 测试用：每分钟检查一次
+    @tasks.loop(seconds=10)
     async def check_expired_roles(self):
         """定期检查并处理过期的身份组分配记录"""
         logger.debug("开始检查过期的身份组分配...")
@@ -54,6 +55,11 @@ class RoleExpiryTask(commands.Cog):
                     continue
 
                 operation_id, details = operation_entry
+                # 检查 fade 标记，若为 True 则跳过自动褪色
+                if isinstance(details, dict) and details.get("fade") is True:
+                    logs_to_keep.append(operation_entry)
+                    continue
+
                 if not isinstance(details, dict) or 'timestamp' not in details or 'data' not in details:
                     logs_to_keep.append(operation_entry)
                     continue

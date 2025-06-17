@@ -39,12 +39,16 @@ class RoleAssigner(commands.Cog):
         role_id_str_1="第二个要分配的身份组ID (可选)",
         role_id_str_2="第三个要分配的身份组ID (可选)", 
         user_ids_str="用户ID列表，多个ID用逗号分隔 (可选)",
-        message_link="包含@用户的消息链接 (可选)"
+        message_link="包含@用户的消息链接 (可选)",
+        fade_flag="处理标记(可选): true/1 表示跳过自动褪色，false/0 或不填为默认"
     )
     @is_authorized() 
-    async def assign_roles(self, interaction: Interaction, role_id_str: str, role_id_str_1: str = None, role_id_str_2: str = None, user_ids_str: str = None, message_link: str = None):
+    async def assign_roles(self, interaction: Interaction, role_id_str: str, role_id_str_1: str = None, role_id_str_2: str = None, user_ids_str: str = None, message_link: str = None, fade_flag: str = None):
+        fade = False
+        if fade_flag is not None and str(fade_flag).lower() in ("true", "1", "yes", "y"):
+            fade = True
 
-        await handle_assign_roles(interaction, role_id_str, user_ids_str, message_link, role_id_str_1, role_id_str_2)
+        await handle_assign_roles(interaction, role_id_str, user_ids_str, message_link, role_id_str_1, role_id_str_2, fade=fade)
 
     @app_commands.command(name="status", description="显示系统和机器人状态")
     async def status_command(self, interaction: discord.Interaction):

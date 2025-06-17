@@ -48,9 +48,10 @@ def _save_assignment_log(log_data):
         logger.error(f"无法写入分配日志文件 {ASSIGNMENT_LOG_FILE}: {e}")
 
 
-async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_ids_str: str = None, message_link: str = None, role_id_str_1: str = None, role_id_str_2: str = None):
+async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_ids_str: str = None, message_link: str = None, role_id_str_1: str = None, role_id_str_2: str = None, fade: bool = False):
     """
     处理批量分配身份组的核心逻辑。
+    fade: 处理标记，True 时系统检查时跳过自动褪色操作
     """
     user_ids = []  # 初始化用户ID列表
     guild = interaction.guild
@@ -343,6 +344,7 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
                 operation_id,
                 {
                     "operation_id": operation_id,
+                    "fade": fade,
                     "timestamp": int(datetime.now().timestamp()),
                     "data": all_log_entries
                 }
