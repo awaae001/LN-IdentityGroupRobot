@@ -5,6 +5,7 @@ import time
 from datetime import timedelta, datetime
 import os
 import asyncio
+import json
 
 # 导入共享的日志加载/保存函数和配置
 try:
@@ -19,8 +20,8 @@ logger = logging.getLogger('discord_bot.cogs.tasks.role_expiry')
 logger.setLevel(logging.DEBUG)  # 确保日志级别为DEBUG
 
 # 定义过期时间（15天）
-# EXPIRY_DURATION_SECONDS = 30 * 24 * 60 * 60
-EXPIRY_DURATION_SECONDS = 60 # 测试用：设置为 1 分钟
+EXPIRY_DURATION_SECONDS = 30 * 24 * 60 * 60
+# EXPIRY_DURATION_SECONDS = 60 # 测试用：设置为 1 分钟
 
 class RoleExpiryTask(commands.Cog):
     """
@@ -33,13 +34,26 @@ class RoleExpiryTask(commands.Cog):
     def cog_unload(self):
         self.check_expired_roles.cancel()
 
-    # @tasks.loop(hours=1.0) 
+    @tasks.loop(hours=1.0) 
     # @tasks.loop(minutes=1.0) # 测试用：每分钟检查一次
-    @tasks.loop(seconds=10)
+    # @tasks.loop(seconds=10)
     async def check_expired_roles(self):
         """定期检查并处理过期的身份组分配记录"""
         logger.debug("开始检查过期的身份组分配...")
         try:
+            exited_user_ids = set()
+            removed_dir = "data/removed"
+            if os.path.exists(removed_dir):
+                for fname in os.listdir(removed_dir):
+                    if fname.endswith(".json"):
+                        fpath = os.path.join(removed_dir, fname)
+                        try:
+                            with open(fpath, "r", encoding="utf-8") as f:
+                                exited_data = json.load(f)
+                                exited_user_ids.update(exited_data.get("data", []))
+                        except Exception as e:
+                            logger.error(f"读取排除名单文件 {fpath} 失败: {e}")
+
             log_data = _load_assignment_log()
             if not isinstance(log_data, list):
                 logger.error("分配日志格式不正确，应为列表。跳过本次检查。")
@@ -143,6 +157,11 @@ class RoleExpiryTask(commands.Cog):
                             continue
 
                         for user_id in assigned_user_ids:
+                            # 跳过自动退出名单中的用户
+                            if str(user_id) in exited_user_ids:
+                                logger.debug(f"用户 {user_id} 在自动退出名单，跳过补偿身份组")
+                                continue
+
                             member = None
                             try:
                                 member = await guild.fetch_member(user_id)

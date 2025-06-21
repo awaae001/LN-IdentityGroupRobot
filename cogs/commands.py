@@ -7,6 +7,8 @@ from .mod.role_assigner_logic import handle_assign_roles
 from .mod import status_utils 
 from .mod.role_members_logic import handle_list_role_members
 from utils.auth_utils import is_authorized
+import re
+from .mod.remove_role_logic import handle_remove_role
 
 logger = logging.getLogger('discord_bot.cogs.role_assigner')
 
@@ -54,7 +56,16 @@ class RoleAssigner(commands.Cog):
     async def status_command(self, interaction: discord.Interaction):
         """显示系统和机器人状态"""
         await status_utils.handle_status_command(interaction, self.bot)
-        
+
+    @app_commands.command(name="remov_role", description="创建一个带按钮的嵌入消息，用户可自助移除指定身份组")
+    @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
+    @app_commands.describe(
+        role_id_str="要移除的身份组ID"
+    )
+    @is_authorized()
+    async def remov_role(self, interaction: Interaction, role_id_str: str):
+        """管理员创建嵌入消息，用户点击按钮可自助移除指定身份组"""
+        await handle_remove_role(interaction, role_id_str)
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError):
         """处理 Cog 内应用程序命令的错误"""
@@ -65,7 +76,6 @@ class RoleAssigner(commands.Cog):
         
         if isinstance(error, app_commands.CheckFailure):
             logger.info(f"命令 /{interaction.command.name} 的权限检查失败，用户: {interaction.user.name} ({interaction.user.id})。已由 is_authorized 处理。")
-            # 不需要再发送通用错误消息，因为 is_authorized 应该已经发送了具体的权限错误
             return
         
         logger.error(f"Cog 'RoleAssigner' 中的命令 /{interaction.command.name} 发生错误: {error}", exc_info=True)
