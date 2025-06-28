@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 import logging
 import config # 导入配置模块
-import asyncio # 用于加载扩展
 import os # 用于处理路径
 from cogs.mod.remove_role_logic import RemoveRoleButton
 

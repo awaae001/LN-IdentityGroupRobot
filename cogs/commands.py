@@ -6,6 +6,7 @@ import config
 from .mod.role_assigner_logic import handle_assign_roles
 from .mod import status_utils 
 from .mod.role_members_logic import handle_list_role_members
+from .mod.role_sync_logic import handle_sync_role
 from utils.auth_utils import is_authorized
 import re
 from .mod.remove_role_logic import handle_remove_role
@@ -67,6 +68,28 @@ class RoleAssigner(commands.Cog):
     async def remov_role(self, interaction: Interaction, role_id_str: str, persist_list: bool = False):
         """管理员创建嵌入消息，用户点击按钮可自助移除指定身份组"""
         await handle_remove_role(interaction, role_id_str, persist_list)
+
+    @app_commands.command(name="sync_role", description="手动同步两个服务器的身份组成员")
+    @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
+    @app_commands.describe(
+        role_id_1="本服务器的身份组ID",
+        server_id="远端服务器的ID",
+        role_id_2="远端服务器的身份组ID",
+        action="选择同步操作"
+    )
+    @app_commands.choices(action=[
+        app_commands.Choice(name="双向同步 (默认)", value="bidirectional"),
+        app_commands.Choice(name="仅推送到远端", value="push"),
+        app_commands.Choice(name="仅同步到本地", value="pull"),
+        app_commands.Choice(name="移除本地同步身份组", value="remove_local"),
+    ])
+    @is_authorized()
+    async def sync_role(self, interaction: Interaction, role_id_1: str, server_id: str, role_id_2: str, action: str = "bidirectional"):
+        """
+        比对两个服务器的身份组成员差异并进行同步。
+        """
+        logger.info(f"开始处理 /sync_role 命令，参数: role_id_1={role_id_1}, server_id={server_id}, role_id_2={role_id_2}, action={action}")
+        await handle_sync_role(interaction, role_id_1, server_id, role_id_2, action)
 
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError):
