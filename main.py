@@ -4,7 +4,7 @@ import logging
 import config # 导入配置模块
 import asyncio # 用于加载扩展
 import os # 用于处理路径
-from cogs.mod.remove_role_logic import RemoveRoleButton  
+from cogs.mod.remove_role_logic import RemoveRoleButton
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger('discord_bot')
@@ -51,7 +51,7 @@ async def on_ready():
 
 # 使用 setup_hook 来异步加载扩展
 async def setup_hook():
-    """在机器人登录前递归加载所有 cogs"""
+    """在机器人登录前递归加载所有 cogs 并注册持久化视图"""
     cogs_root_dir = os.path.join(os.path.dirname(__file__), 'cogs')
     logger.info(f"开始从 {cogs_root_dir} 加载 Cogs...")
 
@@ -77,11 +77,12 @@ async def setup_hook():
                     logger.error(f'加载 Cog "{cog_name}" 失败: {e.__cause__ or e}', exc_info=True)
                 except Exception as e:
                     logger.error(f'加载 Cog "{cog_name}" 时发生未知错误: {e}', exc_info=True)
+    
+    # 在 cogs 加载后注册持久化视图
+    bot.add_view(RemoveRoleButton(role=None))
+    logger.info("成功注册 RemoveRoleButton 持久化视图。")
 
-    bot.setup_hook = setup_hook
-
-    # 注册持久化视图
-    bot.add_view(RemoveRoleButton(None))  
+bot.setup_hook = setup_hook
 
 
 # 运行机器人

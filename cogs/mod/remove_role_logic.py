@@ -12,38 +12,47 @@ class RemoveRoleButton(discord.ui.View):
         self.role = role
         self.persist_list = persist_list
         
-        # 为视图设置唯一的custom_id
-        for item in self.children:
-            if isinstance(item, discord.ui.Button) and item.custom_id == "remove_role_button":
-                item.custom_id = f"remove_role_button_{role.id}"
-
+        # 仅当 role 存在时才设置唯一的 custom_id
+        if self.role:
+            for item in self.children:
+                if isinstance(item, discord.ui.Button) and item.custom_id == "remove_role_button":
+                    item.custom_id = f"remove_role_button_{self.role.id}"
+                    
     @discord.ui.button(label="移除身份组", style=discord.ButtonStyle.danger, custom_id="remove_role_button")
     async def remove_role(self, button_interaction: discord.Interaction, button: discord.ui.Button):
-        # 从custom_id中提取role_id
-        role_id = int(button.custom_id.split("_")[-1])
-        role = button_interaction.guild.get_role(role_id)
+        # 从 custom_id 中提取 role_id
+        try:
+            role_id_str = button.custom_id.split("_")[-1]
+            role_id = int(role_id_str)
+        except (IndexError, ValueError):
+            await button_interaction.response.send_message("无效的按钮ID。", ephemeral=True)
+            return
+
+        guild = button_interaction.guild
+        role = guild.get_role(role_id)
         if not role:
             await button_interaction.response.send_message("身份组不存在或已被删除。", ephemeral=True)
             return
+
         member = button_interaction.user
         # 检查用户是否有该身份组
-        if self.role not in member.roles:
-            await button_interaction.response.send_message(f"你没有身份组：{self.role.name}。", ephemeral=True)
+        if role not in member.roles:
+            await button_interaction.response.send_message(f"你没有身份组：{role.name}。", ephemeral=True)
             return
         try:
-            await member.remove_roles(self.role, reason="用户自助移除")
-            logger.info(f"用户 {member.name} ({member.id}) 成功移除身份组 {self.role.name} ({self.role.id})。")
-            await button_interaction.response.send_message(f"已移除你的身份组：{self.role.name}。", ephemeral=True)
+            await member.remove_roles(role, reason="用户自助移除")
+            logger.info(f"用户 {member.name} ({member.id}) 成功移除身份组 {role.name} ({role.id})。")
+            await button_interaction.response.send_message(f"已移除你的身份组：{role.name}。", ephemeral=True)
             # 日志推送
             await send_remove_role_log(
                 button_interaction,
-                self.role.id,
+                role.id,
                 "自助移除身份组",
-                extra_lines=[f"身份组名: {self.role.name}"]
+                extra_lines=[f"身份组名: {role.name}"]
             )
             # 数据持久化
             if self.persist_list:
-                roleid = str(self.role.id)
+                roleid = str(role.id)
                 data_dir = "data"
                 os.makedirs(data_dir, exist_ok=True)
                 file_path = os.path.join(data_dir, f"removed/{roleid}.json")
@@ -74,7 +83,7 @@ class RemoveRoleButton(discord.ui.View):
         except Exception as e:
             if not button_interaction.response.is_done():
                 await button_interaction.response.send_message(f"移除身份组时发生错误：{e}", ephemeral=True)
-            logger.error(f"用户 {member.name} ({member.id}) 移除身份组 {self.role.name} ({self.role.id}) 时发生错误: {e}", exc_info=True)
+            logger.error(f"用户 {member.name} ({member.id}) 移除身份组 {role.name} ({role.id}) 时发生错误: {e}", exc_info=True)
 
 async def handle_remove_role(interaction: Interaction, role_id_str: str, persist_list: bool = False):
     try:
