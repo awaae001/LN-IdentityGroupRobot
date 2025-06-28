@@ -4,6 +4,7 @@ import logging
 import config # 导入配置模块
 import asyncio # 用于加载扩展
 import os # 用于处理路径
+from cogs.mod.remove_role_logic import RemoveRoleButton  
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger('discord_bot')
@@ -77,7 +78,10 @@ async def setup_hook():
                 except Exception as e:
                     logger.error(f'加载 Cog "{cog_name}" 时发生未知错误: {e}', exc_info=True)
 
-bot.setup_hook = setup_hook
+    bot.setup_hook = setup_hook
+
+    # 注册持久化视图
+    bot.add_view(RemoveRoleButton(None))  
 
 
 # 运行机器人

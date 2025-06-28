@@ -60,12 +60,14 @@ class RoleAssigner(commands.Cog):
     @app_commands.command(name="remov_role", description="创建一个带按钮的嵌入消息，用户可自助移除指定身份组")
     @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
     @app_commands.describe(
-        role_id_str="要移除的身份组ID"
+        role_id_str="要移除的身份组ID",
+        persist_list="是否启用退出人员列表持久化 (默认关闭)"
     )
     @is_authorized()
-    async def remov_role(self, interaction: Interaction, role_id_str: str):
+    async def remov_role(self, interaction: Interaction, role_id_str: str, persist_list: bool = False):
         """管理员创建嵌入消息，用户点击按钮可自助移除指定身份组"""
-        await handle_remove_role(interaction, role_id_str)
+        await handle_remove_role(interaction, role_id_str, persist_list)
+
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError):
         """处理 Cog 内应用程序命令的错误"""
