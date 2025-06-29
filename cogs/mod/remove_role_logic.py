@@ -2,120 +2,132 @@ import discord
 import os
 import json
 import logging
-from discord import Interaction
+from discord import Interaction, SelectOption
+from discord.ui import Select, View
 
 logger = logging.getLogger('discord_bot.cogs.remove_role')
 
-class RemoveRoleButton(discord.ui.View):
-    def __init__(self, role: discord.Role, persist_list: bool = False):
+class RemoveRoleSelectView(View):
+    def __init__(self, roles: list[discord.Role], persist_list: bool = False):
         super().__init__(timeout=None)
-        self.role = role
+        self.roles = roles
         self.persist_list = persist_list
+
+        options = [
+            SelectOption(label=role.name, value=str(role.id), description=f"点击移除身份组: {role.name}")
+            for role in self.roles
+        ]
         
-        # 仅当 role 存在时才设置唯一的 custom_id
-        if self.role:
-            for item in self.children:
-                if isinstance(item, discord.ui.Button) and item.custom_id == "remove_role_button":
-                    item.custom_id = f"remove_role_button_{self.role.id}"
-                    
-    @discord.ui.button(label="移除身份组", style=discord.ButtonStyle.danger, custom_id="remove_role_button")
-    async def remove_role(self, button_interaction: discord.Interaction, button: discord.ui.Button):
-        # 从 custom_id 中提取 role_id
-        try:
-            role_id_str = button.custom_id.split("_")[-1]
-            role_id = int(role_id_str)
-        except (IndexError, ValueError):
-            await button_interaction.response.send_message("无效的按钮ID。", ephemeral=True)
-            return
+        select = Select(
+            placeholder="请选择要移除的身份组...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="remove_role_select"
+        )
+        select.callback = self.select_callback
+        self.add_item(select)
 
-        guild = button_interaction.guild
-        role = guild.get_role(role_id)
+    async def select_callback(self, interaction: Interaction):
+        selected_role_id = int(interaction.data['values'][0])
+        guild = interaction.guild
+        role = guild.get_role(selected_role_id)
+        member = interaction.user
+
         if not role:
-            await button_interaction.response.send_message("身份组不存在或已被删除。", ephemeral=True)
+            await interaction.response.send_message("选择的身份组不存在或已被删除。", ephemeral=True)
             return
 
-        member = button_interaction.user
-        # 检查用户是否有该身份组
         if role not in member.roles:
-            await button_interaction.response.send_message(f"你没有身份组：{role.name}。", ephemeral=True)
+            await interaction.response.send_message(f"你没有身份组：{role.name}。", ephemeral=True)
             return
+
         try:
             await member.remove_roles(role, reason="用户自助移除")
             logger.info(f"用户 {member.name} ({member.id}) 成功移除身份组 {role.name} ({role.id})。")
-            await button_interaction.response.send_message(f"已移除你的身份组：{role.name}。", ephemeral=True)
-            # 日志推送
+            await interaction.response.send_message(f"已移除你的身份组：{role.name}。", ephemeral=True)
+            
             await send_remove_role_log(
-                button_interaction,
+                interaction,
                 role.id,
                 "自助移除身份组",
                 extra_lines=[f"身份组名: {role.name}"]
             )
-            # 数据持久化
+
             if self.persist_list:
-                roleid = str(role.id)
-                data_dir = "data"
-                os.makedirs(data_dir, exist_ok=True)
-                file_path = os.path.join(data_dir, f"removed/{roleid}.json")
-                os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                # 读取原有数据
-                if os.path.exists(file_path):
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        try:
-                            role_data = json.load(f)
-                        except Exception:
-                            role_data = {}
-                else:
-                    role_data = {}
-                # 组织数据结构
-                if "roleid" not in role_data:
-                    role_data["roleid"] = roleid
-                if "data" not in role_data or not isinstance(role_data["data"], list):
-                    role_data["data"] = []
-                user_id = str(member.id)
-                if user_id not in role_data["data"]:
-                    role_data["data"].append(user_id)
-                # 写回文件
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(role_data, f, ensure_ascii=False, indent=2)
+                self.persist_user_removal(role, member)
+
         except discord.Forbidden:
-            if not button_interaction.response.is_done():
-                await button_interaction.response.send_message("机器人权限不足，无法移除该身份组。", ephemeral=True)
+            await interaction.response.send_message("机器人权限不足，无法移除该身份组。", ephemeral=True)
         except Exception as e:
-            if not button_interaction.response.is_done():
-                await button_interaction.response.send_message(f"移除身份组时发生错误：{e}", ephemeral=True)
+            await interaction.response.send_message(f"移除身份组时发生错误：{e}", ephemeral=True)
             logger.error(f"用户 {member.name} ({member.id}) 移除身份组 {role.name} ({role.id}) 时发生错误: {e}", exc_info=True)
 
-async def handle_remove_role(interaction: Interaction, role_id_str: str, persist_list: bool = False):
-    try:
-        role_id = int(role_id_str)
-    except ValueError:
-        await interaction.response.send_message("无效的身份组ID，请输入正确的数字ID。", ephemeral=True)
+    def persist_user_removal(self, role: discord.Role, member: discord.Member):
+        role_id_str = str(role.id)
+        data_dir = "data"
+        file_path = os.path.join(data_dir, f"removed/{role_id_str}.json")
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+        try:
+            if os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    role_data = json.load(f)
+            else:
+                role_data = {}
+        except (json.JSONDecodeError, IOError):
+            role_data = {}
+
+        if "roleid" not in role_data:
+            role_data["roleid"] = role_id_str
+        if "data" not in role_data or not isinstance(role_data.get("data"), list):
+            role_data["data"] = []
+
+        user_id_str = str(member.id)
+        if user_id_str not in role_data["data"]:
+            role_data["data"].append(user_id_str)
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(role_data, f, ensure_ascii=False, indent=2)
+
+
+async def handle_remove_role(interaction: Interaction, role_ids_str: str, persist_list: bool = False):
+    role_id_list = [rid.strip() for rid in role_ids_str.split(',')]
+    roles = []
+    invalid_ids = []
+
+    for role_id_str in role_id_list:
+        try:
+            role_id = int(role_id_str)
+            role = interaction.guild.get_role(role_id)
+            if role:
+                roles.append(role)
+            else:
+                invalid_ids.append(role_id_str)
+        except ValueError:
+            invalid_ids.append(role_id_str)
+
+    if not roles:
+        await interaction.response.send_message(f"提供的所有ID均无效或找不到对应的身份组: {', '.join(invalid_ids)}", ephemeral=True)
         return
 
-    guild = interaction.guild
-    role = guild.get_role(role_id)
-    if not role:
-        await interaction.response.send_message(f"未找到ID为 {role_id} 的身份组。", ephemeral=True)
-        return
+    if invalid_ids:
+        await interaction.followup.send(f"警告：以下ID无效或未找到: {', '.join(invalid_ids)}", ephemeral=True)
 
     embed = discord.Embed(
-        title="自助退出身份组",
-        description=f"点击下方按钮可自动退出身份组：**{role.name}**   \n 操作无法回滚",
+        title="自助移除身份组",
+        description="从下面的菜单中选择你想要移除的身份组。\n操作无法回滚。",
         color=discord.Color.blue()
     )
-    embed.set_footer(text="枫叶 丨 身份组退出")
+    embed.set_footer(text="枫叶 丨 身份组移除")
 
-    view = RemoveRoleButton(role, persist_list)
+    view = RemoveRoleSelectView(roles, persist_list)
     await interaction.response.send_message(embed=embed, view=view)
 
 
 async def send_remove_role_log(interaction, role_id, action_desc, extra_lines=None):
     """
     发送自助移除身份组操作日志到日志频道（嵌入式消息 Embed）
-    :param interaction: discord.Interaction
-    :param role_id: int
-    :param action_desc: str 操作描述
-    :param extra_lines: list[str] 附加内容
     """
     try:
         from config import LOG_CHANNEL_ID
@@ -130,8 +142,8 @@ async def send_remove_role_log(interaction, role_id, action_desc, extra_lines=No
         if not log_channel:
             logger.warning(f"未找到日志频道: {LOG_CHANNEL_ID}")
             return
+        
         user_mention = f"<@{interaction.user.id}>"
-        channel_mention = f"<#{interaction.channel.id}>" if interaction.channel else "未知频道"
         embed = discord.Embed(
             title="身份组成员操作日志",
             description=f"**操作类型：** {action_desc}\n"

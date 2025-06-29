@@ -58,16 +58,16 @@ class RoleAssigner(commands.Cog):
         """显示系统和机器人状态"""
         await status_utils.handle_status_command(interaction, self.bot)
 
-    @app_commands.command(name="remov_role", description="创建一个带按钮的嵌入消息，用户可自助移除指定身份组")
+    @app_commands.command(name="remov_role", description="创建一个带下拉选单的嵌入消息，用户可自助移除指定的身份组")
     @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
     @app_commands.describe(
-        role_id_str="要移除的身份组ID",
+        role_ids_str="要移除的身份组ID列表，多个ID用逗号分隔",
         persist_list="是否启用退出人员列表持久化 (默认关闭)"
     )
     @is_authorized()
-    async def remov_role(self, interaction: Interaction, role_id_str: str, persist_list: bool = False):
-        """管理员创建嵌入消息，用户点击按钮可自助移除指定身份组"""
-        await handle_remove_role(interaction, role_id_str, persist_list)
+    async def remov_role(self, interaction: Interaction, role_ids_str: str, persist_list: bool = False):
+        """管理员创建嵌入消息，用户通过下拉选单可自助移除指定身份组"""
+        await handle_remove_role(interaction, role_ids_str, persist_list)
 
     @app_commands.command(name="sync_role", description="手动同步两个服务器的身份组成员")
     @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])

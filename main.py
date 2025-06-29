@@ -3,7 +3,7 @@ from discord.ext import commands
 import logging
 import config # 导入配置模块
 import os # 用于处理路径
-from cogs.mod.remove_role_logic import RemoveRoleButton
+from cogs.mod.remove_role_logic import RemoveRoleSelectView
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger('discord_bot')
@@ -69,7 +69,7 @@ async def setup_hook():
                 except commands.ExtensionNotFound:
                     logger.error(f'Cog 未找到: {cog_name}')
                 except commands.ExtensionAlreadyLoaded:
-                    logger.warning(f'Cog 已加载: {cog_name}') # 可能在热重载时发生
+                    logger.warning(f'Cog 已加载: {cog_name}')
                 except commands.NoEntryPointError:
                     logger.error(f'Cog "{cog_name}" 没有 setup 函数。')
                 except commands.ExtensionFailed as e:
@@ -78,8 +78,8 @@ async def setup_hook():
                     logger.error(f'加载 Cog "{cog_name}" 时发生未知错误: {e}', exc_info=True)
     
     # 在 cogs 加载后注册持久化视图
-    bot.add_view(RemoveRoleButton(role=None))
-    logger.info("成功注册 RemoveRoleButton 持久化视图。")
+    bot.add_view(RemoveRoleSelectView(roles=[]))
+    logger.info("成功注册 RemoveRoleSelectView 持久化视图。")
 
 bot.setup_hook = setup_hook
 
