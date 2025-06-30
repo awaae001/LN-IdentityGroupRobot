@@ -93,13 +93,9 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
     )
     
     for gid, status in role_status.items():
-        field_value = ""
+        # 只显示有有效身份组的服务器
         if status["valid"]:
-            field_value += f"✅ 有效身份组: {', '.join(status['valid'])}\n"
-        if status["invalid"]:
-            field_value += f"❌ 无效身份组ID: {', '.join(status['invalid'])}\n"
-        
-        if field_value:
+            field_value = f"✅ 有效身份组: {', '.join(status['valid'])}\n"
             verify_embed.add_field(
                 name=f"服务器: {status['name']} ({gid})",
                 value=field_value,

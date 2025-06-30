@@ -46,15 +46,24 @@ async def handle_sync_role(interaction: Interaction, role_id_1_str: str, server_
             logger.error(f"在服务器 {guild_2.name} 中找不到 ID 为 {role_id_2} 的身份组。")
             return
 
-        # 4. 获取成员列表
+        # 4. 获取成员列表和服务器成员列表
         members_1_ids = {member.id for member in role_1.members}
         members_2_ids = {member.id for member in role_2.members}
-
-        # 5. 找出差异
-        # to_add_to_2: 本地有, 远端没有 -> 推送
-        to_add_to_2 = members_1_ids - members_2_ids
-        # to_add_to_1: 远端有, 本地没有 -> 拉取
-        to_add_to_1 = members_2_ids - members_1_ids
+        
+        # 获取两个服务器的所有成员ID
+        guild_1_member_ids = {member.id for member in guild_1.members}
+        guild_2_member_ids = {member.id for member in guild_2.members}
+        
+        # 5. 找出差异（只考虑同时存在于两个服务器的成员）
+        # to_add_to_2: 本地有且在远端服务器中存在但没有身份组 -> 推送
+        to_add_to_2 = members_1_ids.intersection(guild_2_member_ids) - members_2_ids
+        # to_add_to_1: 远端有且在本地服务器中存在但没有身份组 -> 拉取
+        to_add_to_1 = members_2_ids.intersection(guild_1_member_ids) - members_1_ids
+        
+        # 记录日志，帮助调试
+        logger.info(f"本地身份组成员数: {len(members_1_ids)}, 远端身份组成员数: {len(members_2_ids)}")
+        logger.info(f"本地服务器成员数: {len(guild_1_member_ids)}, 远端服务器成员数: {len(guild_2_member_ids)}")
+        logger.info(f"需要推送到远端的成员数: {len(to_add_to_2)}, 需要拉取到本地的成员数: {len(to_add_to_1)}")
 
         # 6. 构建确认消息
         if action != "remove_local" and not to_add_to_1 and not to_add_to_2:
@@ -124,9 +133,14 @@ async def handle_sync_role(interaction: Interaction, role_id_1_str: str, server_
         if action in ["bidirectional", "pull"]:
             for member_id in to_add_to_1:
                 try:
-                    member = await guild_1.fetch_member(member_id)
-                    await member.add_roles(role_1, reason=f"同步自 {guild_2.name} 的 {role_2.name}")
-                    added_to_1_count += 1
+                    # 使用get_member而不是fetch_member，因为我们已经确认这些成员在本地服务器中
+                    member = guild_1.get_member(member_id)
+                    if member:
+                        await member.add_roles(role_1, reason=f"同步自 {guild_2.name} 的 {role_2.name}")
+                        added_to_1_count += 1
+                    else:
+                        logger.warning(f"成员 {member_id} 在本地服务器中不存在，跳过添加身份组")
+                        failed_to_add_to_1.append(member_id)
                 except Exception as e:
                     logger.error(f"无法将成员 {member_id} 添加到身份组 {role_1.name} ({role_1.id})：{e}")
                     failed_to_add_to_1.append(member_id)
@@ -134,23 +148,29 @@ async def handle_sync_role(interaction: Interaction, role_id_1_str: str, server_
         if action in ["bidirectional", "push"]:
             for member_id in to_add_to_2:
                 try:
-                    member = await guild_2.fetch_member(member_id)
-                    await member.add_roles(role_2, reason=f"同步自 {guild_1.name} 的 {role_1.name}")
-                    added_to_2_count += 1
+                    # 使用get_member而不是fetch_member，因为我们已经确认这些成员在远端服务器中
+                    member = guild_2.get_member(member_id)
+                    if member:
+                        await member.add_roles(role_2, reason=f"同步自 {guild_1.name} 的 {role_1.name}")
+                        added_to_2_count += 1
+                    else:
+                        logger.warning(f"成员 {member_id} 在远端服务器中不存在，跳过添加身份组")
+                        failed_to_add_to_2.append(member_id)
                 except Exception as e:
                     logger.error(f"无法将成员 {member_id} 添加到身份组 {role_2.name} ({role_2.id})：{e}")
                     failed_to_add_to_2.append(member_id)
         
         if action == "remove_local":
-            for member_id in members_2_ids:
+            # 只处理同时存在于本地服务器的成员
+            members_to_process = members_2_ids.intersection(guild_1_member_ids)
+            logger.info(f"移除本地身份组：远端身份组成员数 {len(members_2_ids)}，本地存在的成员数 {len(members_to_process)}")
+            
+            for member_id in members_to_process:
                 try:
-                    member = await guild_1.fetch_member(member_id)
-                    if role_1 in member.roles:
+                    member = guild_1.get_member(member_id)
+                    if member and role_1 in member.roles:
                         await member.remove_roles(role_1, reason=f"根据 {guild_2.name} 的 {role_2.name} 进行移除")
                         removed_from_1_count += 1
-                except discord.NotFound:
-                    # 如果成员不在本地服务器，则忽略
-                    pass
                 except Exception as e:
                     logger.error(f"无法从成员 {member_id} 身上移除身份组 {role_1.name} ({role_1.id})：{e}")
                     failed_to_remove_from_1.append(member_id)
