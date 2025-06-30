@@ -19,8 +19,8 @@ except ImportError:
 logger = logging.getLogger('discord_bot.cogs.tasks.role_expiry')
 logger.setLevel(logging.DEBUG)  # 确保日志级别为DEBUG
 
-# 定义过期时间（15天）
-EXPIRY_DURATION_SECONDS = 30 * 24 * 60 * 60
+# 定义过期时间
+EXPIRY_DURATION_SECONDS = 90 * 24 * 60 * 60
 # EXPIRY_DURATION_SECONDS = 60 # 测试用：设置为 1 分钟
 
 class RoleExpiryTask(commands.Cog):
