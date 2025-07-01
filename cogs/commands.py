@@ -8,8 +8,8 @@ from .mod import status_utils
 from .mod.role_members_logic import handle_list_role_members
 from .mod.role_sync_logic import handle_sync_role
 from utils.auth_utils import is_authorized
-import re
 from .mod.remove_role_logic import handle_remove_role
+from .ui.identity_group_view import IdentityGroupView
 
 logger = logging.getLogger('discord_bot.cogs.role_assigner')
 
@@ -43,15 +43,16 @@ class RoleAssigner(commands.Cog):
         role_id_str_2="第三个要分配的身份组ID (可选)", 
         user_ids_str="用户ID列表，多个ID用逗号分隔 (可选)",
         message_link="包含@用户的消息链接 (可选)",
-        fade_flag="处理标记(可选): true/1 表示跳过自动褪色，false/0 或不填为默认"
+        fade_flag="处理标记(可选): true/1 表示跳过自动褪色，false/0 或不填为默认",
+        time="过期时间(天数，可选): 默认为90天"
     )
     @is_authorized() 
-    async def assign_roles(self, interaction: Interaction, role_id_str: str, role_id_str_1: str = None, role_id_str_2: str = None, user_ids_str: str = None, message_link: str = None, fade_flag: str = None):
+    async def assign_roles(self, interaction: Interaction, role_id_str: str, role_id_str_1: str = None, role_id_str_2: str = None, user_ids_str: str = None, message_link: str = None, fade_flag: str = None, time: int = None):
         fade = False
         if fade_flag is not None and str(fade_flag).lower() in ("true", "1", "yes", "y"):
             fade = True
 
-        await handle_assign_roles(interaction, role_id_str, user_ids_str, message_link, role_id_str_1, role_id_str_2, fade=fade)
+        await handle_assign_roles(interaction, role_id_str, user_ids_str, message_link, role_id_str_1, role_id_str_2, fade=fade, time=time)
 
     @app_commands.command(name="status", description="显示系统和机器人状态")
     async def status_command(self, interaction: discord.Interaction):
@@ -90,6 +91,23 @@ class RoleAssigner(commands.Cog):
         """
         logger.info(f"开始处理 /sync_role 命令，参数: role_id_1={role_id_1}, server_id={server_id}, role_id_2={role_id_2}, action={action}")
         await handle_sync_role(interaction, role_id_1, server_id, role_id_2, action)
+        
+    @app_commands.command(name="identity_group_manager", description="唤出管理身份组面板")
+    @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
+    @is_authorized()
+    async def identity_group_manager(self, interaction: Interaction):
+        """
+        显示一个身份组管理器，允许用户管理自己的身份组
+        """
+        view = IdentityGroupView()
+        embed = discord.Embed(
+            title="🆔 杯赛身份组管理器",
+            description="欢迎使用杯赛身份组管理器！\n\n请点击下方按钮来佩戴或移除您的身份组。",
+            color=discord.Color.from_rgb(88, 101, 242)
+        )
+        embed.set_author(name=interaction.guild.name, icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
+        embed.set_footer(text="请选择您要执行的操作。")
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError):

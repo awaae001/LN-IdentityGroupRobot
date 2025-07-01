@@ -19,9 +19,10 @@ except ImportError:
 logger = logging.getLogger('discord_bot.cogs.tasks.role_expiry')
 logger.setLevel(logging.DEBUG)  # 确保日志级别为DEBUG
 
-# 定义过期时间
-EXPIRY_DURATION_SECONDS = 90 * 24 * 60 * 60
-# EXPIRY_DURATION_SECONDS = 60 # 测试用：设置为 1 分钟
+# 定义默认过期时间（当操作记录中没有指定outtime时使用）
+DEFAULT_EXPIRY_DAYS = 90
+DEFAULT_EXPIRY_DURATION_SECONDS = DEFAULT_EXPIRY_DAYS * 24 * 60 * 60
+# DEFAULT_EXPIRY_DURATION_SECONDS = 60 # 测试用：设置为 1 分钟
 
 class RoleExpiryTask(commands.Cog):
     """
@@ -89,11 +90,16 @@ class RoleExpiryTask(commands.Cog):
                     logs_to_keep.append(operation_entry)
                     continue
 
+                # 获取操作的过期时间（天数）
+                expiry_days = details.get('outtime', DEFAULT_EXPIRY_DAYS)
+                # 转换为秒
+                expiry_duration_seconds = expiry_days * 24 * 60 * 60
+                
                 # 检查是否过期
-                if current_time - operation_timestamp > EXPIRY_DURATION_SECONDS:
+                if current_time - operation_timestamp > expiry_duration_seconds:
                     logger.info(f"处理过期操作 ID {operation_id}")
                     processed_operations += 1
-                    operation_fully_processed = True # 假设此操作能完全处理
+                    operation_fully_processed = True
 
                     for assignment in assignment_details_list:
                         if not isinstance(assignment, dict):

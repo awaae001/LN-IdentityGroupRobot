@@ -4,6 +4,7 @@ import logging
 import config # 导入配置模块
 import os # 用于处理路径
 from cogs.mod.remove_role_logic import RemoveRoleSelectView
+from cogs.ui.identity_group_view import IdentityGroupView
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger('discord_bot')
@@ -80,6 +81,8 @@ async def setup_hook():
     # 在 cogs 加载后注册持久化视图
     bot.add_view(RemoveRoleSelectView(roles=[]))
     logger.info("成功注册 RemoveRoleSelectView 持久化视图。")
+    bot.add_view(IdentityGroupView())
+    logger.info("成功注册 IdentityGroupView 持久化视图。")
 
 bot.setup_hook = setup_hook
 

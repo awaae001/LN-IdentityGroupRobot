@@ -40,6 +40,10 @@ def is_authorized():
             else: 
                 logger.warning(f"无法获取用户 {interaction.user.name} ({user_id_str}) 的成员信息或角色列表。")
 
+        # 降级检查：检查用户是否具有 manage_roles 权限
+        if interaction.user.guild_permissions.manage_roles:
+            logger.debug(f"用户 {interaction.user.name} ({user_id_str}) 因拥有 '管理角色' 权限而通过检查。")
+            return True
 
         logger.warning(f"未授权用户 {interaction.user.name} ({user_id_str}) 尝试使用命令 /{interaction.command.name}")
         message = "❌ 抱歉，你没有使用此命令的权限。"
