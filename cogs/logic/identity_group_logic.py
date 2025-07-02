@@ -98,25 +98,51 @@ async def handle_role_update(interaction: discord.Interaction, selected_role_id:
 
 async def handle_view_my_roles(interaction: discord.Interaction):
     """
-    Handles the logic to view the user's current roles.
+    Handles the logic to view the user's current roles, both owned and equipped.
     """
     user = interaction.user
+    guild_id_str = str(interaction.guild.id)
+    user_id_str = str(user.id)
+
     guild_roles_map = load_json_file('data/role_mapping.json')
-    
+    user_assignments = load_json_file('data/user_role_assignments.json')
+
     all_managed_roles = {}
     for group in guild_roles_map.values():
         all_managed_roles.update(group.get('data', {}))
 
-    user_roles = []
-    for role in user.roles:
-        role_id_str = str(role.id)
-        if role_id_str in all_managed_roles:
-            user_roles.append(f"- {role.mention} (`{all_managed_roles[role_id_str]}`)")
+    user_current_role_ids = {str(role.id) for role in user.roles}
+    user_owned_role_ids = {str(role_id) for role_id in user_assignments.get(user_id_str, {}).get(guild_id_str, [])}
+    
+    all_relevant_role_ids = user_current_role_ids.union(user_owned_role_ids)
 
-    if not user_roles:
+    equipped_roles = []
+    owned_roles = []
+
+    for role_id_str in all_relevant_role_ids:
+        if role_id_str in all_managed_roles:
+            role_name = all_managed_roles[role_id_str]
+            role_mention = f"<@&{role_id_str}>"
+            
+            is_equipped = role_id_str in user_current_role_ids
+            is_owned = role_id_str in user_owned_role_ids
+
+            if is_equipped:
+                equipped_roles.append(f"- {role_mention} (`{role_name}`)")
+            elif is_owned:
+                owned_roles.append(f"- {role_mention} (`{role_name}`)")
+
+    description_parts = []
+    if equipped_roles:
+        description_parts.append("**✅ 已佩戴的身份组**\n" + "\n".join(equipped_roles))
+    
+    if owned_roles:
+        description_parts.append("**📦 已拥有但未佩戴的身份组**\n" + "\n".join(owned_roles))
+
+    if not description_parts:
         description = "您当前没有任何通过身份组管理器获取的身份组。"
     else:
-        description = "\n".join(user_roles)
+        description = "\n\n".join(description_parts)
 
     embed = discord.Embed(
         title=f"✨ {user.display_name} 的身份组",
@@ -124,6 +150,7 @@ async def handle_view_my_roles(interaction: discord.Interaction):
         color=discord.Color.blue()
     )
     embed.set_thumbnail(url=user.display_avatar.url)
-    embed.set_footer(text=f"共找到 {len(user_roles)} 个身份组。")
+    total_roles = len(equipped_roles) + len(owned_roles)
+    embed.set_footer(text=f"共找到 {total_roles} 个相关身份组。")
 
     await interaction.response.send_message(embed=embed, ephemeral=True)

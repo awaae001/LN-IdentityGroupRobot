@@ -97,8 +97,11 @@ class RoleAssigner(commands.Cog):
     @is_authorized()
     async def identity_group_manager(self, interaction: Interaction):
         """
-        显示一个身份组管理器，允许用户管理自己的身份组
+        显示一个身份组管理器，允许用户管理自己的身份组。
+        优先尝试在当前频道发送面板，如果无权限则回退为向用户发送临时消息。
         """
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
         view = IdentityGroupView()
         embed = discord.Embed(
             title="🆔 杯赛身份组管理器",
@@ -107,7 +110,18 @@ class RoleAssigner(commands.Cog):
         )
         embed.set_author(name=interaction.guild.name, icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
         embed.set_footer(text="请选择您要执行的操作。")
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
+
+        try:
+            # 尝试在频道中直接发送消息
+            await interaction.channel.send(embed=embed, view=view)
+            await interaction.followup.send("✅ 管理面板已发送至当前频道。", ephemeral=True)
+        except discord.Forbidden:
+            # 如果没有权限，则作为临时消息发送给用户
+            logger.warning(f"无法在频道 {interaction.channel.name} ({interaction.channel.id}) 中发送身份组管理器，回退到临时消息。")
+            await interaction.followup.send(embed=embed, view=view)
+        except Exception as e:
+            logger.error(f"发送身份组管理器时发生未知错误: {e}", exc_info=True)
+            await interaction.followup.send("发送管理面板时发生未知错误，请联系管理员。", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError):
