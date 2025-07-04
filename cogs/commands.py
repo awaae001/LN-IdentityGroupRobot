@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands, Interaction
 import logging
 import config
+import os
 from .mod.role_assigner_logic import handle_assign_roles
 from .mod import status_utils 
 from .mod.role_members_logic import handle_list_role_members
@@ -13,6 +14,22 @@ from .ui.identity_group_view import IdentityGroupView
 
 logger = logging.getLogger('discord_bot.cogs.role_assigner')
 
+
+def get_cog_names():
+    """Dynamically gets all cog names from the cogs directory."""
+    cog_names = []
+    cogs_root_dir = os.path.join(os.path.dirname(__file__), '..', 'cogs')
+    for root, dirs, files in os.walk(cogs_root_dir):
+        # Exclude __pycache__ directories
+        dirs[:] = [d for d in dirs if not d.startswith('__')]
+        for filename in files:
+            if filename.endswith('.py') and not filename.startswith('_'):
+                # Construct the module name from the file path
+                relative_path = os.path.relpath(os.path.join(root, filename), os.path.join(cogs_root_dir, '..'))
+                module_name_parts = relative_path[:-3].split(os.sep)
+                cog_name = '.'.join(module_name_parts)
+                cog_names.append(cog_name)
+    return cog_names
 
 class RoleAssigner(commands.Cog):
     """包含与角色分配相关的命令的 Cog。"""
@@ -102,6 +119,12 @@ class RoleAssigner(commands.Cog):
         """
         await interaction.response.defer(ephemeral=True, thinking=True)
 
+        # 检查Cog是否加载
+        if not self.bot.get_cog("IdentityGroupLogic"):
+            logger.error("IdentityGroupLogic cog not loaded.")
+            await interaction.followup.send("身份组管理功能当前不可用，请联系管理员。", ephemeral=True)
+            return
+
         view = IdentityGroupView()
         embed = discord.Embed(
             title="🆔 杯赛身份组管理器",
@@ -122,6 +145,54 @@ class RoleAssigner(commands.Cog):
         except Exception as e:
             logger.error(f"发送身份组管理器时发生未知错误: {e}", exc_info=True)
             await interaction.followup.send("发送管理面板时发生未知错误，请联系管理员。", ephemeral=True)
+
+    @app_commands.command(name="reload", description="重载指定的机器人模块 (Cog)")
+    @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
+    @app_commands.describe(cog_name="要重载的模块名称")
+    @is_authorized()
+    async def reload_cog(self, interaction: Interaction, cog_name: str):
+        """重载指定的机器人模块 (Cog)"""
+        await interaction.response.defer(ephemeral=True)
+        try:
+            await self.bot.reload_extension(cog_name)
+            logger.info(f"模块 {cog_name} 已由 {interaction.user.name} 重载。")
+            embed = discord.Embed(
+                title="✅ 重载成功",
+                description=f"模块 **{cog_name}** 已成功重载。",
+                color=discord.Color.green()
+            )
+            await interaction.followup.send(embed=embed)
+        except commands.ExtensionNotLoaded:
+            embed = discord.Embed(
+                title="❌ 重载失败",
+                description=f"模块 **{cog_name}** 从未被加载过。",
+                color=discord.Color.orange()
+            )
+            await interaction.followup.send(embed=embed)
+        except commands.ExtensionNotFound:
+            embed = discord.Embed(
+                title="❌ 重载失败",
+                description=f"找不到模块 **{cog_name}**。",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed)
+        except Exception as e:
+            logger.error(f"重载模块 {cog_name} 时发生错误: {e}", exc_info=True)
+            embed = discord.Embed(
+                title="❌ 重载失败",
+                description=f"重载模块 **{cog_name}** 时发生未知错误。\n```\n{e}\n```",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed)
+
+    @reload_cog.autocomplete('cog_name')
+    async def reload_cog_autocomplete(self, interaction: Interaction, current: str) -> list[app_commands.Choice[str]]:
+        """Autocompletes the cog_name parameter for the reload command."""
+        cog_names = get_cog_names()
+        return [
+            app_commands.Choice(name=cog, value=cog)
+            for cog in cog_names if current.lower() in cog.lower()
+        ]
 
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError):

@@ -1,6 +1,5 @@
 import discord
 from discord.ui import View, Select
-from cogs.logic import identity_group_logic
 
 class IdentityGroupView(View):
     def __init__(self):
@@ -17,12 +16,16 @@ class IdentityGroupView(View):
 
     async def button_callback(self, interaction: discord.Interaction):
         action = interaction.data['custom_id']
-
-        if action == "view_my_roles":
-            await identity_group_logic.handle_view_my_roles(interaction)
+        cog = interaction.client.get_cog('IdentityGroupLogic')
+        if not cog:
+            await interaction.response.send_message("逻辑处理模块未加载，请联系管理员。", ephemeral=True)
             return
 
-        options = identity_group_logic.get_user_assignable_roles(interaction.user, action)
+        if action == "view_my_roles":
+            await cog.handle_view_my_roles(interaction)
+            return
+
+        options = cog.get_user_assignable_roles(interaction.user, action)
 
         if not options:
             action_text = "佩戴" if action == "add_role" else "移除"
@@ -71,7 +74,12 @@ class IdentityGroupView(View):
             await interaction.response.edit_message(embed=embed, view=None)
             return
         
+        cog = interaction.client.get_cog('IdentityGroupLogic')
+        if not cog:
+            await interaction.response.edit_message(content="逻辑处理模块未加载，请联系管理员。", view=None)
+            return
+
         selected_role_id = int(interaction.data['values'][0])
         action = interaction.data['custom_id'].split('_')[0]
         
-        await identity_group_logic.handle_role_update(interaction, selected_role_id, action)
+        await cog.handle_role_update(interaction, selected_role_id, action)
