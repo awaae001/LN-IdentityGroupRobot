@@ -48,19 +48,53 @@ def _save_assignment_log(log_data):
         logger.error(f"无法写入分配日志文件 {ASSIGNMENT_LOG_FILE}: {e}")
 
 
-async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_ids_str: str = None, message_link: str = None, role_id_str_1: str = None, role_id_str_2: str = None, fade: bool = False, time: int = None):
+async def handle_assign_roles(interaction: Interaction, role_id_str: str = None, user_ids_str: str = None, message_link: str = None, role_id_str_1: str = None, role_id_str_2: str = None, fade: bool = False, time: int = None, operation_id: str = None):
     """
     处理批量分配身份组的核心逻辑。
     fade: 处理标记，True 时系统检查时跳过自动褪色操作
     time: 过期时间(天数)，默认为90天
+    operation_id: 如果提供，则基于此历史操作补充人员
     """
-    user_ids = []  # 初始化用户ID列表
+    user_ids = []
     guild = interaction.guild
     all_guilds = [g for g in interaction.client.guilds if g.id in GUILD_IDS]
     role_status = {}
-    operation_id = str(random.randint(1000, 9999))  # 生成4位随机操作ID
     operation_timestamp = datetime.now().isoformat()
     
+    # 如果提供了 operation_id，则从历史记录加载角色
+    if operation_id:
+        log_data = _load_assignment_log()
+        history_op = next((op for op in log_data if op[0] == operation_id), None)
+
+        if not history_op:
+            await interaction.response.send_message(f"错误：未找到操作ID为 `{operation_id}` 的历史记录。", ephemeral=True)
+            return
+        
+        # 从历史记录中提取所有涉及的 role_id
+        all_role_ids = []
+        for entry in history_op[1]['data']:
+            all_role_ids.extend(entry.get('role_ids', []))
+        
+        # 去重并转换为字符串
+        role_id_strs_from_history = [str(rid) for rid in set(all_role_ids)]
+        
+        # 用历史 role_id 覆盖传入的参数
+        role_id_str = role_id_strs_from_history[0] if len(role_id_strs_from_history) > 0 else None
+        role_id_str_1 = role_id_strs_from_history[1] if len(role_id_strs_from_history) > 1 else None
+        role_id_str_2 = role_id_strs_from_history[2] if len(role_id_strs_from_history) > 2 else None
+        
+        if not any([role_id_str, role_id_str_1, role_id_str_2]):
+            await interaction.response.send_message(f"错误：操作ID `{operation_id}` 的历史记录中不包含有效的身份组信息。", ephemeral=True)
+            return
+            
+    elif not role_id_str:
+        await interaction.response.send_message("错误：必须提供身份组ID或有效的操作ID。", ephemeral=True)
+        return
+
+    # 如果不是基于历史操作，则生成新的 operation_id
+    if not operation_id:
+        operation_id = str(random.randint(1000, 9999))
+
     for g in all_guilds:
         invalid_in_guild = []
         valid_in_guild = []
@@ -334,27 +368,63 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str, user_i
         all_failed.extend(failed_users)
 
     # 保存所有分配日志
+    # 保存或更新分配日志
     if all_log_entries:
         try:
             log_data = _load_assignment_log()
-            operation_entry = [
-                operation_id,
-                {
-                    "operation_id": operation_id,
-                    "fade": fade,
-                    "outtime": time,
-                    "timestamp": int(datetime.now().timestamp()),
-                    "data": all_log_entries
-                }
-            ]
             if not isinstance(log_data, list):
                 log_data = []
-            log_data.append(operation_entry)
+
+            # 检查是否是基于历史操作的补充
+            existing_op_index = -1
+            for i, op in enumerate(log_data):
+                if op[0] == operation_id:
+                    existing_op_index = i
+                    break
+            
+            if existing_op_index != -1:
+                # 更新现有操作
+                logger.info(f"正在为操作ID {operation_id} 补充新的人员分配记录。")
+                # all_log_entries 包含了本次新分配的用户
+                # 我们需要将这些新用户追加到历史记录中
+                for new_entry in all_log_entries:
+                    guild_id = new_entry['guild_id']
+                    new_user_ids = new_entry['assigned_user_ids']
+                    
+                    # 在旧记录中查找对应服务器的条目
+                    history_guild_entry = next((e for e in log_data[existing_op_index][1]['data'] if e['guild_id'] == guild_id), None)
+                    
+                    if history_guild_entry:
+                        # 合并用户ID并去重
+                        existing_user_ids = set(history_guild_entry.get('assigned_user_ids', []))
+                        existing_user_ids.update(new_user_ids)
+                        history_guild_entry['assigned_user_ids'] = list(existing_user_ids)
+                        logger.debug(f"已将 {len(new_user_ids)} 名新用户追加到服务器 {guild_id} 的记录中。")
+                    else:
+                        # 如果历史记录中没有这个服务器的条目（理论上不应该发生），则添加
+                        log_data[existing_op_index][1]['data'].append(new_entry)
+                        logger.warning(f"在操作 {operation_id} 的历史记录中未找到服务器 {guild_id} 的条目，已新建。")
+
+            else:
+                # 创建新操作
+                logger.info(f"正在创建新的操作ID {operation_id} 的分配记录。")
+                operation_entry = [
+                    operation_id,
+                    {
+                        "operation_id": operation_id,
+                        "fade": fade,
+                        "outtime": time,
+                        "timestamp": int(datetime.now().timestamp()),
+                        "data": all_log_entries
+                    }
+                ]
+                log_data.append(operation_entry)
+
             _save_assignment_log(log_data)
-            logger.info(f"已将操作ID {operation_id} 的 {len(all_log_entries)} 条跨服务器分配记录保存到 {ASSIGNMENT_LOG_FILE}")
+            logger.info(f"已成功将操作ID {operation_id} 的分配记录保存到 {ASSIGNMENT_LOG_FILE}")
+
         except Exception as e:
             logger.error(f"保存分配日志时出错: {e}", exc_info=True)
-
     # 构建响应消息
     try:
         # 先检查总embed长度

@@ -50,9 +50,9 @@ class IdentityGroupView(View):
 
     def get_embed_details(self, action):
         if action == "add_role":
-            return "佩戴身份组", "请从下面的菜单中选择您想佩戴的身份组。", discord.Color.blue()
+            return "佩戴身份组", "请从下面的菜单中选择您想佩戴的身份组", discord.Color.blue()
         else: # remove_role
-            return "移除身份组", "请从下面的菜单中选择您想移除的身份组。", discord.Color.red()
+            return "移除身份组", "请从下面的菜单中选择您想移除的身份组", discord.Color.red()
 
     def create_role_select(self, options, action):
         placeholder_text = f"✨ 选择要{'佩戴' if action == 'add_role' else '移除'}的身份组..."
@@ -70,13 +70,13 @@ class IdentityGroupView(View):
 
     async def select_callback(self, interaction: discord.Interaction):
         if interaction.data['values'][0] == 'no_roles':
-            embed = discord.Embed(title="提示", description="没有可操作的选项。", color=discord.Color.gold())
+            embed = discord.Embed(title="提示", description="没有可操作的选项", color=discord.Color.gold())
             await interaction.response.edit_message(embed=embed, view=None)
             return
         
         cog = interaction.client.get_cog('IdentityGroupLogic')
         if not cog:
-            await interaction.response.edit_message(content="逻辑处理模块未加载，请联系管理员。", view=None)
+            await interaction.response.edit_message(content="逻辑处理模块未加载，请联系管理员", view=None)
             return
 
         selected_role_id = int(interaction.data['values'][0])

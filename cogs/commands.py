@@ -57,19 +57,20 @@ class RoleAssigner(commands.Cog):
     @app_commands.describe(
         role_id_str="第一个要分配的身份组ID",
         role_id_str_1="第二个要分配的身份组ID (可选)",
-        role_id_str_2="第三个要分配的身份组ID (可选)", 
+        role_id_str_2="第三个要分配的身份组ID (可选)",
         user_ids_str="用户ID列表，多个ID用逗号分隔 (可选)",
         message_link="包含@用户的消息链接 (可选)",
+        operation_id="要补充人员的操作ID (可选, 提供此项时将忽略上方填写的身份组)",
         fade_flag="处理标记(可选): true/1 表示跳过自动褪色，false/0 或不填为默认",
         time="过期时间(天数，可选): 默认为90天"
     )
-    @is_authorized() 
-    async def assign_roles(self, interaction: Interaction, role_id_str: str, role_id_str_1: str = None, role_id_str_2: str = None, user_ids_str: str = None, message_link: str = None, fade_flag: str = None, time: int = None):
+    @is_authorized()
+    async def assign_roles(self, interaction: Interaction, role_id_str: str = None, role_id_str_1: str = None, role_id_str_2: str = None, user_ids_str: str = None, message_link: str = None, operation_id: str = None, fade_flag: str = None, time: int = None):
         fade = False
         if fade_flag is not None and str(fade_flag).lower() in ("true", "1", "yes", "y"):
             fade = True
 
-        await handle_assign_roles(interaction, role_id_str, user_ids_str, message_link, role_id_str_1, role_id_str_2, fade=fade, time=time)
+        await handle_assign_roles(interaction, role_id_str, user_ids_str, message_link, role_id_str_1, role_id_str_2, fade=fade, time=time, operation_id=operation_id)
 
     @app_commands.command(name="status", description="显示系统和机器人状态")
     async def status_command(self, interaction: discord.Interaction):
@@ -128,23 +129,23 @@ class RoleAssigner(commands.Cog):
         view = IdentityGroupView()
         embed = discord.Embed(
             title="🆔 杯赛身份组管理器",
-            description="欢迎使用杯赛身份组管理器！\n\n请点击下方按钮来佩戴或移除您的身份组。",
+            description="欢迎使用杯赛身份组管理器！\n\n请点击下方按钮来佩戴或移除您的身份组",
             color=discord.Color.from_rgb(88, 101, 242)
         )
         embed.set_author(name=interaction.guild.name, icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
-        embed.set_footer(text="请选择您要执行的操作。")
+        embed.set_footer(text="请选择您要执行的操作")
 
         try:
             # 尝试在频道中直接发送消息
             await interaction.channel.send(embed=embed, view=view)
-            await interaction.followup.send("✅ 管理面板已发送至当前频道。", ephemeral=True)
+            await interaction.followup.send("✅ 管理面板已发送至当前频道", ephemeral=True)
         except discord.Forbidden:
             # 如果没有权限，则作为临时消息发送给用户
-            logger.warning(f"无法在频道 {interaction.channel.name} ({interaction.channel.id}) 中发送身份组管理器，回退到临时消息。")
+            logger.warning(f"无法在频道 {interaction.channel.name} ({interaction.channel.id}) 中发送身份组管理器，回退到临时消息")
             await interaction.followup.send(embed=embed, view=view)
         except Exception as e:
             logger.error(f"发送身份组管理器时发生未知错误: {e}", exc_info=True)
-            await interaction.followup.send("发送管理面板时发生未知错误，请联系管理员。", ephemeral=True)
+            await interaction.followup.send("发送管理面板时发生未知错误，请联系管理员", ephemeral=True)
 
     @app_commands.command(name="reload", description="重载指定的机器人模块 (Cog)")
     @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
@@ -155,24 +156,24 @@ class RoleAssigner(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         try:
             await self.bot.reload_extension(cog_name)
-            logger.info(f"模块 {cog_name} 已由 {interaction.user.name} 重载。")
+            logger.info(f"模块 {cog_name} 已由 {interaction.user.name} 重载")
             embed = discord.Embed(
                 title="✅ 重载成功",
-                description=f"模块 **{cog_name}** 已成功重载。",
+                description=f"模块 **{cog_name}** 已成功重载",
                 color=discord.Color.green()
             )
             await interaction.followup.send(embed=embed)
         except commands.ExtensionNotLoaded:
             embed = discord.Embed(
                 title="❌ 重载失败",
-                description=f"模块 **{cog_name}** 从未被加载过。",
+                description=f"模块 **{cog_name}** 从未被加载过",
                 color=discord.Color.orange()
             )
             await interaction.followup.send(embed=embed)
         except commands.ExtensionNotFound:
             embed = discord.Embed(
                 title="❌ 重载失败",
-                description=f"找不到模块 **{cog_name}**。",
+                description=f"找不到模块 **{cog_name}**",
                 color=discord.Color.red()
             )
             await interaction.followup.send(embed=embed)
@@ -180,7 +181,7 @@ class RoleAssigner(commands.Cog):
             logger.error(f"重载模块 {cog_name} 时发生错误: {e}", exc_info=True)
             embed = discord.Embed(
                 title="❌ 重载失败",
-                description=f"重载模块 **{cog_name}** 时发生未知错误。\n```\n{e}\n```",
+                description=f"重载模块 **{cog_name}** 时发生未知错误\n```\n{e}\n```",
                 color=discord.Color.red()
             )
             await interaction.followup.send(embed=embed)
