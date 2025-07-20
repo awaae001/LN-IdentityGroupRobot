@@ -5,6 +5,7 @@ import config # 导入配置模块
 import os # 用于处理路径
 from cogs.mod.remove_role_logic import RemoveRoleSelectView
 from cogs.ui.identity_group_view import IdentityGroupView
+from cogs.ui.role_distributor_view import RoleDistributorView
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger('discord_bot')
@@ -51,38 +52,40 @@ async def on_ready():
 
 # 使用 setup_hook 来异步加载扩展
 async def setup_hook():
-    """在机器人登录前递归加载所有 cogs 并注册持久化视图"""
-    cogs_root_dir = os.path.join(os.path.dirname(__file__), 'cogs')
-    logger.info(f"开始从 {cogs_root_dir} 加载 Cogs...")
+    """在机器人登录前加载所有 cogs 并注册持久化视图"""
+    logger.info("开始加载 Cogs...")
+    
+    # 定义要加载的 Cog 列表
+    cogs_to_load = [
+        'cogs.commands',
+        'cogs.logic.identity_group_logic',
+        'cogs.logic.role_distributor_logic',
+        'cogs.tasks.role_expiry',
+        'cogs.tasks.user_role_formatter',
+    ]
 
-    for root, dirs, files in os.walk(cogs_root_dir):
-        dirs[:] = [d for d in dirs if not d.startswith('__')]
-
-        for filename in files:
-            if filename.endswith('.py') and not filename.startswith('_'):
-                relative_path = os.path.relpath(os.path.join(root, filename), cogs_root_dir)
-                module_name_parts = relative_path[:-3].split(os.sep)
-                cog_name = 'cogs.' + '.'.join(module_name_parts)
-
-                try:
-                    await bot.load_extension(cog_name)
-                    logger.info(f'成功加载 Cog: {cog_name}')
-                except commands.ExtensionNotFound:
-                    logger.error(f'Cog 未找到: {cog_name}')
-                except commands.ExtensionAlreadyLoaded:
-                    logger.warning(f'Cog 已加载: {cog_name}')
-                except commands.NoEntryPointError:
-                    logger.error(f'Cog "{cog_name}" 没有 setup 函数。')
-                except commands.ExtensionFailed as e:
-                    logger.error(f'加载 Cog "{cog_name}" 失败: {e.__cause__ or e}', exc_info=True)
-                except Exception as e:
-                    logger.error(f'加载 Cog "{cog_name}" 时发生未知错误: {e}', exc_info=True)
+    for cog_name in cogs_to_load:
+        try:
+            await bot.load_extension(cog_name)
+            logger.info(f'成功加载 Cog: {cog_name}')
+        except commands.ExtensionNotFound:
+            logger.error(f'Cog 未找到: {cog_name}')
+        except commands.ExtensionAlreadyLoaded:
+            logger.warning(f'Cog 已加载: {cog_name}')
+        except commands.NoEntryPointError:
+            logger.error(f'Cog "{cog_name}" 没有 setup 函数。')
+        except commands.ExtensionFailed as e:
+            logger.error(f'加载 Cog "{cog_name}" 失败: {e.__cause__ or e}', exc_info=True)
+        except Exception as e:
+            logger.error(f'加载 Cog "{cog_name}" 时发生未知错误: {e}', exc_info=True)
     
     # 在 cogs 加载后注册持久化视图
     bot.add_view(RemoveRoleSelectView(roles=[]))
     logger.info("成功注册 RemoveRoleSelectView 持久化视图。")
     bot.add_view(IdentityGroupView())
     logger.info("成功注册 IdentityGroupView 持久化视图。")
+    bot.add_view(RoleDistributorView())
+    logger.info("成功注册 RoleDistributorView 持久化视图。")
 
 bot.setup_hook = setup_hook
 

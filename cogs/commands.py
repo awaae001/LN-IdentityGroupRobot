@@ -1,16 +1,20 @@
 import discord
 from discord.ext import commands
 from discord import app_commands, Interaction
+from typing import TYPE_CHECKING
 import logging
 import config
 import os
 from .mod.role_assigner_logic import handle_assign_roles
+if TYPE_CHECKING:
+    from .logic.role_distributor_logic import RoleDistributorLogic
 from .mod import status_utils 
 from .mod.role_members_logic import handle_list_role_members
 from .mod.role_sync_logic import handle_sync_role
 from utils.auth_utils import is_authorized
 from .mod.remove_role_logic import handle_remove_role
 from .ui.identity_group_view import IdentityGroupView
+from .ui.role_distributor_view import RoleDistributorView
 
 logger = logging.getLogger('discord_bot.cogs.role_assigner')
 
@@ -39,6 +43,47 @@ class RoleAssigner(commands.Cog):
         self.guild_id = config.GUILD_ID
         if self.guild_id is None:
             logger.error("GUILD_ID 未在配置中正确加载，RoleAssigner Cog 可能无法正常工作。")
+
+    async def handle_create_role_distributor(self, interaction: Interaction, channel: discord.TextChannel, role: discord.Role, title: str, content: str, name: str):
+        """处理创建或更新身份组分发器的逻辑。"""
+        await interaction.response.defer(ephemeral=True)
+        
+        logic_cog: "RoleDistributorLogic" = self.bot.get_cog("RoleDistributorLogic")
+        if not logic_cog:
+            await interaction.followup.send("错误：RoleDistributorLogic 未加载。", ephemeral=True)
+            return
+
+        try:
+            # 准备嵌入消息
+            embed = discord.Embed(title=title, description=content, color=discord.Color.blue())
+            if interaction.guild.icon:
+                embed.set_author(name=name, icon_url=interaction.guild.icon.url)
+            else:
+                embed.set_author(name=name)
+            
+            view = RoleDistributorView()
+            
+            # 发送消息
+            message = await channel.send(embed=embed, view=view)
+            
+            # 更新或创建配置
+            channel_id_str = str(channel.id)
+            logic_cog.distributors[channel_id_str] = {
+                "message_id": message.id,
+                "role_id": role.id,
+                "title": title,
+                "content": content,
+                "name": name
+            }
+            logic_cog.save_distributors()
+            
+            await interaction.followup.send(f"✅ 成功在 {channel.mention} 创建了身份组分发器。", ephemeral=True)
+
+        except discord.Forbidden:
+            await interaction.followup.send("❌ 错误：机器人没有权限在该频道发送消息。", ephemeral=True)
+        except Exception as e:
+            logger.error(f"创建身份组分发器时出错: {e}", exc_info=True)
+            await interaction.followup.send(f"❌ 创建过程中发生未知错误: {e}", ephemeral=True)
 
     @app_commands.command(name="list_role_members", description="查找某个身份组下的全部成员并可进行批量操作")
     @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
@@ -109,7 +154,63 @@ class RoleAssigner(commands.Cog):
         """
         logger.info(f"开始处理 /sync_role 命令，参数: role_id_1={role_id_1}, server_id={server_id}, role_id_2={role_id_2}, action={action}")
         await handle_sync_role(interaction, role_id_1, server_id, role_id_2, action)
+
+    @app_commands.command(name="create_role_distributor", description="在指定频道创建或更新一个身份组分发消息")
+    @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
+    @app_commands.describe(
+        channel="要发送消息的频道",
+        role="要分发的身份组",
+        title="嵌入消息的标题",
+        content="嵌入消息的内容",
+        name="机器人显示的名称"
+    )
+    @is_authorized()
+    async def create_role_distributor(self, interaction: Interaction, channel: discord.TextChannel, role: discord.Role, title: str, content: str, name: str):
+        """在指定频道创建或更新一个身份组分发消息。"""
+        await self.handle_create_role_distributor(interaction, channel, role, title, content, name)
+
+    @app_commands.command(name="delete_role_distributor", description="删除一个已配置的身份组分发器")
+    @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
+    @app_commands.describe(channel="要删除分发器的频道")
+    @is_authorized()
+    async def delete_role_distributor(self, interaction: Interaction, channel: str):
+        """删除指定频道的身份组分发器。"""
+        await interaction.response.defer(ephemeral=True)
         
+        logic_cog: "RoleDistributorLogic" = self.bot.get_cog("RoleDistributorLogic")
+        if not logic_cog:
+            await interaction.followup.send("错误：RoleDistributorLogic 未加载。", ephemeral=True)
+            return
+        
+        try:
+            channel_id = int(channel)
+            channel_obj = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
+            if not isinstance(channel_obj, discord.TextChannel):
+                await interaction.followup.send("错误：提供的ID不是一个有效的文字频道。", ephemeral=True)
+                return
+        except (ValueError, discord.NotFound, discord.Forbidden):
+            await interaction.followup.send("错误：找不到提供的频道ID。", ephemeral=True)
+            return
+
+        if await logic_cog.delete_distributor(channel_obj):
+            await interaction.followup.send(f"✅ 成功删除了频道 {channel_obj.mention} 的身份组分发器。", ephemeral=True)
+        else:
+            await interaction.followup.send(f"ℹ️ 频道 {channel_obj.mention} 中没有找到需要删除的身份组分发器。", ephemeral=True)
+
+    @delete_role_distributor.autocomplete('channel')
+    async def delete_role_distributor_autocomplete(self, interaction: Interaction, current: str) -> list[app_commands.Choice[str]]:
+        """为删除命令提供已配置频道的自动完成。"""
+        logic_cog: "RoleDistributorLogic" = self.bot.get_cog("RoleDistributorLogic")
+        if not logic_cog:
+            return []
+            
+        choices = []
+        for channel_id_str in logic_cog.distributors.keys():
+            channel = self.bot.get_channel(int(channel_id_str))
+            if channel and (not current or current.lower() in channel.name.lower()):
+                choices.append(app_commands.Choice(name=f"#{channel.name}", value=channel_id_str))
+        
+        return choices
     @app_commands.command(name="identity_group_manager", description="唤出管理身份组面板")
     @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
     @is_authorized()
