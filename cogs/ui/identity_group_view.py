@@ -18,7 +18,7 @@ class IdentityGroupView(View):
         action = interaction.data['custom_id']
         cog = interaction.client.get_cog('IdentityGroupLogic')
         if not cog:
-            await interaction.response.send_message("逻辑处理模块未加载，请联系管理员。", ephemeral=True)
+            await interaction.response.send_message("逻辑处理模块未加载，请联系管理员", ephemeral=True)
             return
 
         if action == "view_my_roles":
@@ -31,7 +31,7 @@ class IdentityGroupView(View):
             action_text = "佩戴" if action == "add_role" else "移除"
             embed = discord.Embed(
                 title="提示",
-                description=f"您当前没有可 {action_text} 的身份组。",
+                description=f"您当前没有可 {action_text} 的身份组",
                 color=discord.Color.gold()
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -39,7 +39,7 @@ class IdentityGroupView(View):
 
         title, description, color = self.get_embed_details(action)
         embed = discord.Embed(title=title, description=description, color=color)
-        embed.set_footer(text="此消息将在3分钟后失效。")
+        embed.set_footer(text="此消息将在3分钟后失效")
 
         select = self.create_role_select(options, action)
         

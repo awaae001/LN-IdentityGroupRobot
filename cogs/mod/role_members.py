@@ -17,7 +17,7 @@ async def send_log_to_channel(interaction, role_id, action_desc, extra_lines=Non
     :param extra_lines: list[str] 附加内容
     """
     if not LOG_CHANNEL_ID:
-        logger.warning("未配置 LOG_CHANNEL_ID，无法发送日志到频道。")
+        logger.warning("未配置 LOG_CHANNEL_ID，无法发送日志到频道")
         return
     try:
         log_channel = interaction.client.get_channel(int(LOG_CHANNEL_ID))
@@ -104,7 +104,7 @@ class RoleActionSelect(Select):
         elif action == "replace":
             await self.handle_replace_action(interaction2, role)
         else:
-            await interaction2.response.send_message("❌ 未知操作类型。", ephemeral=True)
+            await interaction2.response.send_message("❌ 未知操作类型", ephemeral=True)
 
     async def handle_remove_action(self, interaction2: discord.Interaction, role):
         class ConfirmRemoveView(View):
@@ -117,7 +117,7 @@ class RoleActionSelect(Select):
             @discord.ui.button(label="确认批量移除身份组", style=discord.ButtonStyle.danger)
             async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
                 if interaction.user.id != interaction2.user.id:
-                    await interaction.response.send_message("❌ 只有命令发起者可以确认操作。", ephemeral=True)
+                    await interaction.response.send_message("❌ 只有命令发起者可以确认操作", ephemeral=True)
                     return
                 
                 failed = []
@@ -130,11 +130,11 @@ class RoleActionSelect(Select):
                         logger.error(f"移除成员 {member.display_name} ({member.id}) 身份组失败: {str(e)}")
                         failed.append(f"{member.display_name} ({member.id})")
                 
-                msg = f"已尝试移除身份组 <@&{self.role_id}> 下的所有成员。\n"
+                msg = f"已尝试移除身份组 <@&{self.role_id}> 下的所有成员\n"
                 if failed:
                     msg += f"以下成员移除失败：\n" + "\n".join(failed)
                 else:
-                    msg += "全部成员移除成功。"
+                    msg += "全部成员移除成功"
                 
                 await interaction.response.send_message(msg)
                 # 日志频道记录
@@ -155,13 +155,13 @@ class RoleActionSelect(Select):
             @discord.ui.button(label="取消", style=discord.ButtonStyle.secondary)
             async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
                 if interaction.user.id != interaction2.user.id:
-                    await interaction.response.send_message("❌ 只有命令发起者可以取消操作。", ephemeral=True)
+                    await interaction.response.send_message("❌ 只有命令发起者可以取消操作", ephemeral=True)
                     return
-                await interaction.response.send_message("已取消批量移除操作。", ephemeral=True)
+                await interaction.response.send_message("已取消批量移除操作", ephemeral=True)
                 self.stop()
 
         await interaction2.response.send_message(
-            f"⚠️ 确认要移除身份组 <@&{self.role_id}> 下的所有成员吗？此操作不可撤销。",
+            f"⚠️ 确认要移除身份组 <@&{self.role_id}> 下的所有成员吗？此操作不可撤销",
             view=ConfirmRemoveView(self.role_id, self.members),
             ephemeral=True
         )
@@ -176,7 +176,7 @@ class RoleActionSelect(Select):
             @discord.ui.button(label="确认批量替换身份组", style=discord.ButtonStyle.primary)
             async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
                 if interaction.user.id != interaction2.user.id:
-                    await interaction.response.send_message("❌ 只有命令发起者可以确认操作。", ephemeral=True)
+                    await interaction.response.send_message("❌ 只有命令发起者可以确认操作", ephemeral=True)
                     return
 
                 class NewRoleModal(Modal, title="输入新身份组ID"):
@@ -195,7 +195,7 @@ class RoleActionSelect(Select):
                         
                         if not new_role:
                             await modal_interaction.response.send_message(
-                                f"❌ 未找到新身份组ID {self.new_role_id.value}。", 
+                                f"❌ 未找到新身份组ID {self.new_role_id.value}", 
                                 ephemeral=True
                             )
                             return
@@ -232,13 +232,13 @@ class RoleActionSelect(Select):
                                     failed_add.append(f"{member.display_name} ({member.id})")
                             
                             # 准备结果消息
-                            msg = f"已完成将身份组 <@&{self.role_id}> 下的成员替换为 <@&{self.new_role_id.value}>。\n"
+                            msg = f"已完成将身份组 <@&{self.role_id}> 下的成员替换为 <@&{self.new_role_id.value}>\n"
                             if failed_remove:
                                 msg += f"以下成员移除原身份组失败：\n" + "\n".join(failed_remove) + "\n"
                             if failed_add:
                                 msg += f"以下成员添加新身份组失败：\n" + "\n".join(failed_add)
                             if not failed_remove and not failed_add:
-                                msg += "全部成员替换成功。"
+                                msg += "全部成员替换成功"
                             
                             # 发送结果消息
                             try:
@@ -272,13 +272,13 @@ class RoleActionSelect(Select):
             @discord.ui.button(label="取消", style=discord.ButtonStyle.secondary)
             async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
                 if interaction.user.id != interaction2.user.id:
-                    await interaction.response.send_message("❌ 只有命令发起者可以取消操作。", ephemeral=True)
+                    await interaction.response.send_message("❌ 只有命令发起者可以取消操作", ephemeral=True)
                     return
-                await interaction.response.send_message("已取消批量替换操作。", ephemeral=True)
+                await interaction.response.send_message("已取消批量替换操作", ephemeral=True)
                 self.stop()
 
         await interaction2.response.send_message(
-            f"⚠️ 确认要将身份组 <@&{self.role_id}> 下的所有成员替换为新身份组吗？此操作不可撤销。",
+            f"⚠️ 确认要将身份组 <@&{self.role_id}> 下的所有成员替换为新身份组吗？此操作不可撤销",
             view=ConfirmReplaceView(self.role_id, self.members),
             ephemeral=True
         )

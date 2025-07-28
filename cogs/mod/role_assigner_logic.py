@@ -31,7 +31,7 @@ def _load_assignment_log():
                 return []
             return json.loads(content) 
     except json.JSONDecodeError:
-         logger.error(f"无法解析分配日志文件 {ASSIGNMENT_LOG_FILE}，将返回空列表。")
+         logger.error(f"无法解析分配日志文件 {ASSIGNMENT_LOG_FILE}，将返回空列表")
          return [] 
     except IOError as e:
         logger.error(f"读取分配日志文件 {ASSIGNMENT_LOG_FILE} 时出错: {e}")
@@ -50,7 +50,7 @@ def _save_assignment_log(log_data):
 
 async def handle_assign_roles(interaction: Interaction, role_id_str: str = None, user_ids_str: str = None, message_link: str = None, role_id_str_1: str = None, role_id_str_2: str = None, fade: bool = False, time: int = None, operation_id: str = None):
     """
-    处理批量分配身份组的核心逻辑。
+    处理批量分配身份组的核心逻辑
     fade: 处理标记，True 时系统检查时跳过自动褪色操作
     time: 过期时间(天数)，默认为90天
     operation_id: 如果提供，则基于此历史操作补充人员
@@ -67,7 +67,7 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
         history_op = next((op for op in log_data if op[0] == operation_id), None)
 
         if not history_op:
-            await interaction.response.send_message(f"错误：未找到操作ID为 `{operation_id}` 的历史记录。", ephemeral=True)
+            await interaction.response.send_message(f"错误：未找到操作ID为 `{operation_id}` 的历史记录", ephemeral=True)
             return
         
         # 从历史记录中提取所有涉及的 role_id
@@ -84,11 +84,11 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
         role_id_str_2 = role_id_strs_from_history[2] if len(role_id_strs_from_history) > 2 else None
         
         if not any([role_id_str, role_id_str_1, role_id_str_2]):
-            await interaction.response.send_message(f"错误：操作ID `{operation_id}` 的历史记录中不包含有效的身份组信息。", ephemeral=True)
+            await interaction.response.send_message(f"错误：操作ID `{operation_id}` 的历史记录中不包含有效的身份组信息", ephemeral=True)
             return
             
     elif not role_id_str:
-        await interaction.response.send_message("错误：必须提供身份组ID或有效的操作ID。", ephemeral=True)
+        await interaction.response.send_message("错误：必须提供身份组ID或有效的操作ID", ephemeral=True)
         return
 
     # 如果不是基于历史操作，则生成新的 operation_id
@@ -240,36 +240,36 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
         
         match = re.match(r'https://discord\.com/channels/(\d+)/(\d+)/(\d+)', message_link)
         if not match:
-            await interaction.followup.send("错误：提供的消息链接格式无效。", ephemeral=True)
+            await interaction.followup.send("错误：提供的消息链接格式无效", ephemeral=True)
             return
 
         link_guild_id, channel_id, message_id = map(int, match.groups())
 
         if link_guild_id != guild.id:
-             await interaction.followup.send("错误：消息链接指向的服务器与当前服务器不符。", ephemeral=True)
+             await interaction.followup.send("错误：消息链接指向的服务器与当前服务器不符", ephemeral=True)
              return
 
         try:
             channel = guild.get_channel(channel_id) or await guild.fetch_channel(channel_id)
             if not isinstance(channel, discord.TextChannel): 
-                 await interaction.followup.send("错误：消息链接指向的不是有效的文本频道。", ephemeral=True)
+                 await interaction.followup.send("错误：消息链接指向的不是有效的文本频道", ephemeral=True)
                  return
             message = await channel.fetch_message(message_id)
         except discord.NotFound:
-            await interaction.followup.send("错误：无法找到消息链接对应的频道或消息。", ephemeral=True)
+            await interaction.followup.send("错误：无法找到消息链接对应的频道或消息", ephemeral=True)
             return
         except discord.Forbidden:
-             await interaction.followup.send("错误：机器人没有权限访问该消息所在的频道。", ephemeral=True)
+             await interaction.followup.send("错误：机器人没有权限访问该消息所在的频道", ephemeral=True)
              return
         except Exception as e:
             logger.error(f"获取消息时出错 ({message_link}): {e}", exc_info=True)
-            await interaction.followup.send("错误：获取消息时发生未知错误。", ephemeral=True)
+            await interaction.followup.send("错误：获取消息时发生未知错误", ephemeral=True)
             return
 
         # 从消息内容中提取用户提及
         mentioned_user_ids_raw = re.findall(r'<@!?(\d+)>', message.content)
         if not mentioned_user_ids_raw:
-             await interaction.followup.send("错误：在指定的消息中未找到任何用户提及。", ephemeral=True)
+             await interaction.followup.send("错误：在指定的消息中未找到任何用户提及", ephemeral=True)
              return
 
         for uid_str in mentioned_user_ids_raw:
@@ -288,13 +288,13 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
                 invalid_ids.append(uid_str)
     else:
         # 如果两者都未提供
-        await interaction.response.send_message("错误：请提供用户 ID 列表或有效的消息链接。", ephemeral=True)
+        await interaction.response.send_message("错误：请提供用户 ID 列表或有效的消息链接", ephemeral=True)
         return
 
     # 去重
     user_ids = list(set(user_ids))
     if not user_ids:
-        await interaction.response.send_message("错误：未能提取到任何有效的用户 ID。", ephemeral=True)
+        await interaction.response.send_message("错误：未能提取到任何有效的用户 ID", ephemeral=True)
         return
 
     all_assigned = []
@@ -342,13 +342,13 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
                     role_names = ", ".join([f'"{r.name}" ({r.id})' for r in current_roles])
                     assigned_users.append(f'{g.name}: {member.name}#{member.discriminator}')
                     successfully_assigned_ids.append(member.id)
-                    logger.info(f'在服务器 {g.name} 成功为 {member.name} 分配了 {role_names} 身份组。')
+                    logger.info(f'在服务器 {g.name} 成功为 {member.name} 分配了 {role_names} 身份组')
             except discord.NotFound:
                 failed_users.append(f'{g.name}: {user_id} (未找到)')
-                logger.warning(f'在服务器 {g.name} 未找到 ID 为 {user_id} 的用户。')
+                logger.warning(f'在服务器 {g.name} 未找到 ID 为 {user_id} 的用户')
             except discord.Forbidden:
                 failed_users.append(f'{g.name}: {user_id} (权限不足)')
-                logger.error(f'在服务器 {g.name} 机器人权限不足，无法为 ID 为 {user_id} 的用户分配身份组。')
+                logger.error(f'在服务器 {g.name} 机器人权限不足，无法为 ID 为 {user_id} 的用户分配身份组')
             except Exception as e:
                 failed_users.append(f'{g.name}: {user_id} (未知错误: {e})')
                 logger.error(f'在服务器 {g.name} 为 ID 为 {user_id} 的用户分配身份组时发生未知错误: {e}', exc_info=True)
@@ -384,7 +384,7 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
             
             if existing_op_index != -1:
                 # 更新现有操作
-                logger.info(f"正在为操作ID {operation_id} 补充新的人员分配记录。")
+                logger.info(f"正在为操作ID {operation_id} 补充新的人员分配记录")
                 # all_log_entries 包含了本次新分配的用户
                 # 我们需要将这些新用户追加到历史记录中
                 for new_entry in all_log_entries:
@@ -399,15 +399,15 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
                         existing_user_ids = set(history_guild_entry.get('assigned_user_ids', []))
                         existing_user_ids.update(new_user_ids)
                         history_guild_entry['assigned_user_ids'] = list(existing_user_ids)
-                        logger.debug(f"已将 {len(new_user_ids)} 名新用户追加到服务器 {guild_id} 的记录中。")
+                        logger.debug(f"已将 {len(new_user_ids)} 名新用户追加到服务器 {guild_id} 的记录中")
                     else:
                         # 如果历史记录中没有这个服务器的条目（理论上不应该发生），则添加
                         log_data[existing_op_index][1]['data'].append(new_entry)
-                        logger.warning(f"在操作 {operation_id} 的历史记录中未找到服务器 {guild_id} 的条目，已新建。")
+                        logger.warning(f"在操作 {operation_id} 的历史记录中未找到服务器 {guild_id} 的条目，已新建")
 
             else:
                 # 创建新操作
-                logger.info(f"正在创建新的操作ID {operation_id} 的分配记录。")
+                logger.info(f"正在创建新的操作ID {operation_id} 的分配记录")
                 operation_entry = [
                     operation_id,
                     {
@@ -431,7 +431,7 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
         if len(all_assigned) > 50 or len(all_failed) > 20:
             summary = discord.Embed(
                 title="跨服务器身份组分配完成",
-                description=f"成功: {len(all_assigned)}, 失败: {len(all_failed)}。\n详情请查看机器人控制台日志。",
+                description=f"成功: {len(all_assigned)}, 失败: {len(all_failed)}\n详情请查看机器人控制台日志",
                 color=discord.Color.green()
             )
             await interaction.channel.send(embed=summary)

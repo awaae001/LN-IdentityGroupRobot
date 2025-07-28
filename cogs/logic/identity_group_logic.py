@@ -56,7 +56,7 @@ class IdentityGroupLogic(commands.Cog):
         member = interaction.user
 
         if not role:
-            embed = discord.Embed(title="错误", description="选择的身份组不存在或已被删除。", color=discord.Color.red())
+            embed = discord.Embed(title="错误", description="选择的身份组不存在或已被删除", color=discord.Color.red())
             await interaction.response.edit_message(embed=embed, view=None)
             return
 
@@ -68,10 +68,10 @@ class IdentityGroupLogic(commands.Cog):
 
             if action == "add":
                 if role in member.roles:
-                    embed = discord.Embed(title="提示", description=f"您已经拥有身份组：**{role.name}**。", color=discord.Color.gold())
+                    embed = discord.Embed(title="提示", description=f"您已经拥有身份组：**{role.name}**", color=discord.Color.gold())
                 else:
                     await member.add_roles(role, reason="用户通过身份组管理器佩戴")
-                    embed = discord.Embed(title="✅ 操作成功", description=f"已为您佩戴身份组：**{role.name}**。", color=discord.Color.green())
+                    embed = discord.Embed(title="✅ 操作成功", description=f"已为您佩戴身份组：**{role.name}**", color=discord.Color.green())
                     
                     if role_id_str in removal_log and user_id_str in removal_log[role_id_str]:
                         removal_log[role_id_str].remove(user_id_str)
@@ -81,10 +81,10 @@ class IdentityGroupLogic(commands.Cog):
 
             elif action == "remove":
                 if role not in member.roles:
-                    embed = discord.Embed(title="提示", description=f"您没有身份组：**{role.name}**。", color=discord.Color.gold())
+                    embed = discord.Embed(title="提示", description=f"您没有身份组：**{role.name}**", color=discord.Color.gold())
                 else:
                     await member.remove_roles(role, reason="用户通过身份组管理器移除")
-                    embed = discord.Embed(title="✅ 操作成功", description=f"已移除您的身份组：**{role.name}**。", color=discord.Color.green())
+                    embed = discord.Embed(title="✅ 操作成功", description=f"已移除您的身份组：**{role.name}**", color=discord.Color.green())
                     
                     if role_id_str not in removal_log:
                         removal_log[role_id_str] = []
@@ -95,7 +95,7 @@ class IdentityGroupLogic(commands.Cog):
             await interaction.response.edit_message(embed=embed, view=None)
 
         except discord.Forbidden:
-            embed = discord.Embed(title="❌ 权限错误", description="机器人权限不足，无法操作该身份组。", color=discord.Color.red())
+            embed = discord.Embed(title="❌ 权限错误", description="机器人权限不足，无法操作该身份组", color=discord.Color.red())
             await interaction.response.edit_message(embed=embed, view=None)
         except Exception as e:
             embed = discord.Embed(title="❌ 未知错误", description=f"操作身份组时发生错误：\n```\n{e}\n```", color=discord.Color.red())
@@ -145,7 +145,7 @@ class IdentityGroupLogic(commands.Cog):
             description_parts.append("**📦 已拥有但未佩戴的身份组**\n" + "\n".join(owned_roles))
 
         if not description_parts:
-            description = "您当前没有任何通过身份组管理器获取的身份组。"
+            description = "您当前没有任何通过身份组管理器获取的身份组"
         else:
             description = "\n\n".join(description_parts)
 
@@ -156,7 +156,7 @@ class IdentityGroupLogic(commands.Cog):
         )
         embed.set_thumbnail(url=user.display_avatar.url)
         total_roles = len(equipped_roles) + len(owned_roles)
-        embed.set_footer(text=f"共找到 {total_roles} 个相关身份组。")
+        embed.set_footer(text=f"共找到 {total_roles} 个相关身份组")
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

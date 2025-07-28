@@ -6,6 +6,7 @@ import os # 用于处理路径
 from cogs.mod.remove_role_logic import RemoveRoleSelectView
 from cogs.ui.identity_group_view import IdentityGroupView
 from cogs.ui.role_distributor_view import RoleDistributorView
+from cogs.ui.role_auto_apply_view import RoleAutoApplyView
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger('discord_bot')
@@ -25,7 +26,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 async def on_ready():
     """当机器人准备就绪时记录消息并同步命令"""
     if not GUILD_IDS: 
-        logger.error("没有配置有效的服务器ID，无法继续。")
+        logger.error("没有配置有效的服务器ID，无法继续")
         await bot.close()
         return
 
@@ -43,7 +44,7 @@ async def on_ready():
             if guild:
                 logger.info(f'目标服务器名称: {guild.name}')
         except discord.errors.Forbidden:
-            logger.error(f"机器人缺少同步服务器 {guild_id} 命令所需的 '应用程序命令' 权限。请在服务器设置 -> 集成 -> 机器人和应用 中检查权限。")
+            logger.error(f"机器人缺少同步服务器 {guild_id} 命令所需的 '应用程序命令' 权限请在服务器设置 -> 集成 -> 机器人和应用 中检查权限")
         except discord.errors.HTTPException as e:
             logger.error(f"同步命令时发生 HTTP 错误: {e}", exc_info=True)
         except Exception as e:
@@ -73,7 +74,7 @@ async def setup_hook():
         except commands.ExtensionAlreadyLoaded:
             logger.warning(f'Cog 已加载: {cog_name}')
         except commands.NoEntryPointError:
-            logger.error(f'Cog "{cog_name}" 没有 setup 函数。')
+            logger.error(f'Cog "{cog_name}" 没有 setup 函数')
         except commands.ExtensionFailed as e:
             logger.error(f'加载 Cog "{cog_name}" 失败: {e.__cause__ or e}', exc_info=True)
         except Exception as e:
@@ -81,11 +82,13 @@ async def setup_hook():
     
     # 在 cogs 加载后注册持久化视图
     bot.add_view(RemoveRoleSelectView(roles=[]))
-    logger.info("成功注册 RemoveRoleSelectView 持久化视图。")
+    logger.info("成功注册 RemoveRoleSelectView 持久化视图")
     bot.add_view(IdentityGroupView())
-    logger.info("成功注册 IdentityGroupView 持久化视图。")
+    logger.info("成功注册 IdentityGroupView 持久化视图")
     bot.add_view(RoleDistributorView())
     logger.info("成功注册 RoleDistributorView 持久化视图。")
+    bot.add_view(RoleAutoApplyView())
+    logger.info("成功注册 RoleAutoApplyView 持久化视图。")
 
 bot.setup_hook = setup_hook
 
@@ -93,13 +96,13 @@ bot.setup_hook = setup_hook
 # 运行机器人
 if __name__ == "__main__":
     if TOKEN is None or not GUILD_IDS:
-         logger.critical("机器人无法启动，因为 DISCORD_TOKEN 或 GUILD_IDS 未能从配置中加载。请检查 .env 文件和 config.py 中的日志。")
+         logger.critical("机器人无法启动，因为 DISCORD_TOKEN 或 GUILD_IDS 未能从配置中加载请检查 .env 文件和 config.py 中的日志")
     else:
         try:
             logger.info("正在启动机器人...")
             bot.run(TOKEN)
         except discord.LoginFailure:
-            logger.critical("无效的 Discord Token。请检查 .env 文件中的 DISCORD_TOKEN。")
+            logger.critical("无效的 Discord Token请检查 .env 文件中的 DISCORD_TOKEN")
         except Exception as e:
             # 捕获其他可能的启动时异常
             logger.critical(f"启动机器人时发生严重错误: {e}", exc_info=True)

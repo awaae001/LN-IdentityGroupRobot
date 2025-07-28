@@ -12,23 +12,23 @@ async def handle_list_role_members(interaction: Interaction, role_id_str: str):
     logger.info(f"用户 {interaction.user.name}({interaction.user.id}) 请求了身份组 {role_id_str} 的成员列表")
     guild = interaction.guild
     if not guild:
-        await interaction.response.send_message("❌ 此命令只能在服务器内使用。", ephemeral=True, delete_after=120)
+        await interaction.response.send_message("❌ 此命令只能在服务器内使用", ephemeral=True, delete_after=120)
         return
     
     try:
         role_id = int(role_id_str)
     except ValueError:
-        await interaction.response.send_message("❌ 请输入正确的身份组ID（数字）。", ephemeral=True, delete_after=120)
+        await interaction.response.send_message("❌ 请输入正确的身份组ID（数字）", ephemeral=True, delete_after=120)
         return
     
     role = guild.get_role(role_id)
     if not role:
-        await interaction.response.send_message(f"❌ 未找到ID为 {role_id} 的身份组。", ephemeral=True, delete_after=120)
+        await interaction.response.send_message(f"❌ 未找到ID为 {role_id} 的身份组", ephemeral=True, delete_after=120)
         return
     
     members = role.members
     if not members:
-        await interaction.response.send_message(f"身份组 <@&{role_id}> 下没有成员。", ephemeral=True, delete_after=120)
+        await interaction.response.send_message(f"身份组 <@&{role_id}> 下没有成员", ephemeral=True, delete_after=120)
         return
 
     # 分页显示成员列表，每页最多30个成员

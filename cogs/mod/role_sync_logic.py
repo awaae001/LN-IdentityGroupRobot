@@ -7,14 +7,14 @@ logger = logging.getLogger('discord_bot.cogs.role_sync_logic')
 
 async def handle_sync_role(interaction: Interaction, role_id_1_str: str, server_id_str: str, role_id_2_str: str, action: str = "bidirectional"):
     """
-    处理两个服务器之间身份组的成员同步。
+    处理两个服务器之间身份组的成员同步
 
     Args:
-        interaction (Interaction): Discord 交互对象。
-        role_id_1_str (str): 本服务器的身份组ID。
-        server_id_str (str): 远端服务器的ID。
-        role_id_2_str (str): 远端服务器的身份组ID。
-        action (str): 同步操作类型 ('bidirectional', 'push', 'pull')。
+        interaction (Interaction): Discord 交互对象
+        role_id_1_str (str): 本服务器的身份组ID
+        server_id_str (str): 远端服务器的ID
+        role_id_2_str (str): 远端服务器的身份组ID
+        action (str): 同步操作类型 ('bidirectional', 'push', 'pull')
     """
     await interaction.response.defer(ephemeral=True)
 
@@ -29,21 +29,21 @@ async def handle_sync_role(interaction: Interaction, role_id_1_str: str, server_
         guild_2 = interaction.client.get_guild(server_id)
 
         if guild_2 is None:
-            await interaction.followup.send(f"错误：找不到 ID 为 {server_id} 的服务器。机器人可能不在该服务器中。", ephemeral=True)
-            logger.error(f"无法找到 ID 为 {server_id} 的服务器。请检查机器人是否在该服务器中。")
+            await interaction.followup.send(f"错误：找不到 ID 为 {server_id} 的服务器机器人可能不在该服务器中", ephemeral=True)
+            logger.error(f"无法找到 ID 为 {server_id} 的服务器请检查机器人是否在该服务器中")
             return
 
         # 3. 获取身份组对象
         role_1 = guild_1.get_role(role_id_1)
         if role_1 is None:
-            await interaction.followup.send(f"错误：在当前服务器中找不到 ID 为 {role_id_1} 的身份组。", ephemeral=True)
-            logger.error(f"在服务器 {guild_1.name} 中找不到 ID 为 {role_id_1} 的身份组。")
+            await interaction.followup.send(f"错误：在当前服务器中找不到 ID 为 {role_id_1} 的身份组", ephemeral=True)
+            logger.error(f"在服务器 {guild_1.name} 中找不到 ID 为 {role_id_1} 的身份组")
             return
 
         role_2 = guild_2.get_role(role_id_2)
         if role_2 is None:
-            await interaction.followup.send(f"错误：在服务器 {guild_2.name} 中找不到 ID 为 {role_id_2} 的身份组。", ephemeral=True)
-            logger.error(f"在服务器 {guild_2.name} 中找不到 ID 为 {role_id_2} 的身份组。")
+            await interaction.followup.send(f"错误：在服务器 {guild_2.name} 中找不到 ID 为 {role_id_2} 的身份组", ephemeral=True)
+            logger.error(f"在服务器 {guild_2.name} 中找不到 ID 为 {role_id_2} 的身份组")
             return
 
         # 4. 获取成员列表和服务器成员列表
@@ -67,8 +67,8 @@ async def handle_sync_role(interaction: Interaction, role_id_1_str: str, server_
 
         # 6. 构建确认消息
         if action != "remove_local" and not to_add_to_1 and not to_add_to_2:
-            await interaction.followup.send("两个身份组的成员列表已经一致，无需同步。", ephemeral=True)
-            logger.info(f"身份组 {role_1.name} 和 {role_2.name} 的成员列表已经一致，无需同步。")
+            await interaction.followup.send("两个身份组的成员列表已经一致，无需同步", ephemeral=True)
+            logger.info(f"身份组 {role_1.name} 和 {role_2.name} 的成员列表已经一致，无需同步")
             return
 
         action_text = {
@@ -87,19 +87,19 @@ async def handle_sync_role(interaction: Interaction, role_id_1_str: str, server_
         if action in ["bidirectional", "pull"]:
             embed.add_field(
                 name=f"⬇️ 拉取到本地 ({guild_1.name})",
-                value=f"将向身份组 `{role_1.name}` 添加 **{len(to_add_to_1)}** 名成员。",
+                value=f"将向身份组 `{role_1.name}` 添加 **{len(to_add_to_1)}** 名成员",
                 inline=False
             )
         if action in ["bidirectional", "push"]:
             embed.add_field(
                 name=f"⬆️ 推送到远端 ({guild_2.name})",
-                value=f"将向身份组 `{role_2.name}` 添加 **{len(to_add_to_2)}** 名成员。",
+                value=f"将向身份组 `{role_2.name}` 添加 **{len(to_add_to_2)}** 名成员",
                 inline=False
             )
         if action == "remove_local":
             embed.add_field(
                 name=f"🗑️ 移除本地身份组 ({guild_1.name})",
-                value=f"将从 **{len(members_2_ids)}** 名成员身上移除身份组 `{role_1.name}`。\n**这是一个危险操作，请谨慎确认！**",
+                value=f"将从 **{len(members_2_ids)}** 名成员身上移除身份组 `{role_1.name}`\n**这是一个危险操作，请谨慎确认！**",
                 inline=False
             )
         
@@ -112,16 +112,16 @@ async def handle_sync_role(interaction: Interaction, role_id_1_str: str, server_
         await view.wait()
 
         if view.value is None:
-            await interaction.edit_original_response(content="操作超时，已取消同步。", embed=None, view=None)
+            await interaction.edit_original_response(content="操作超时，已取消同步", embed=None, view=None)
             return
         if not view.value:
-            await interaction.edit_original_response(content="操作已取消。", embed=None, view=None)
+            await interaction.edit_original_response(content="操作已取消", embed=None, view=None)
             return
         
         # 7. 执行同步
         processing_embed = discord.Embed(
             title="正在处理...",
-            description=f"正在执行 **{action_text}** 操作，请稍候。",
+            description=f"正在执行 **{action_text}** 操作，请稍候",
             color=discord.Color.gold()
         )
         await interaction.edit_original_response(embed=processing_embed, view=None)
@@ -239,7 +239,7 @@ async def handle_sync_role(interaction: Interaction, role_id_1_str: str, server_
 
 
     except ValueError:
-        await interaction.followup.send("错误：提供的ID无效，请输入纯数字ID。", ephemeral=True)
+        await interaction.followup.send("错误：提供的ID无效，请输入纯数字ID", ephemeral=True)
     except Exception as e:
         logger.error(f"处理身份组同步时发生错误: {e}", exc_info=True)
         error_embed = discord.Embed(

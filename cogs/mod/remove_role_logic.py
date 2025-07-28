@@ -35,17 +35,17 @@ class RemoveRoleSelectView(View):
         member = interaction.user
 
         if not role:
-            await interaction.response.send_message("选择的身份组不存在或已被删除。", ephemeral=True)
+            await interaction.response.send_message("选择的身份组不存在或已被删除", ephemeral=True)
             return
 
         if role not in member.roles:
-            await interaction.response.send_message(f"你没有身份组：{role.name}。", ephemeral=True)
+            await interaction.response.send_message(f"你没有身份组：{role.name}", ephemeral=True)
             return
 
         try:
             await member.remove_roles(role, reason="用户自助移除")
-            logger.info(f"用户 {member.name} ({member.id}) 成功移除身份组 {role.name} ({role.id})。")
-            await interaction.response.send_message(f"已移除你的身份组：{role.name}。", ephemeral=True)
+            logger.info(f"用户 {member.name} ({member.id}) 成功移除身份组 {role.name} ({role.id})")
+            await interaction.response.send_message(f"已移除你的身份组：{role.name}", ephemeral=True)
             
             await send_remove_role_log(
                 interaction,
@@ -58,7 +58,7 @@ class RemoveRoleSelectView(View):
                 self.persist_user_removal(role, member)
 
         except discord.Forbidden:
-            await interaction.response.send_message("机器人权限不足，无法移除该身份组。", ephemeral=True)
+            await interaction.response.send_message("机器人权限不足，无法移除该身份组", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"移除身份组时发生错误：{e}", ephemeral=True)
             logger.error(f"用户 {member.name} ({member.id}) 移除身份组 {role.name} ({role.id}) 时发生错误: {e}", exc_info=True)
@@ -116,7 +116,7 @@ async def handle_remove_role(interaction: Interaction, role_ids_str: str, persis
 
     embed = discord.Embed(
         title="自助移除身份组",
-        description="从下面的菜单中选择你想要移除的身份组。\n操作无法回滚。",
+        description="从下面的菜单中选择你想要移除的身份组\n操作无法回滚",
         color=discord.Color.blue()
     )
     embed.set_footer(text="枫叶 丨 身份组移除")
@@ -135,7 +135,7 @@ async def send_remove_role_log(interaction, role_id, action_desc, extra_lines=No
         LOG_CHANNEL_ID = None
 
     if not LOG_CHANNEL_ID:
-        logger.warning("未配置 LOG_CHANNEL_ID，无法发送日志到频道。")
+        logger.warning("未配置 LOG_CHANNEL_ID，无法发送日志到频道")
         return
     try:
         log_channel = interaction.client.get_channel(int(LOG_CHANNEL_ID))

@@ -26,7 +26,7 @@ DEFAULT_EXPIRY_DURATION_SECONDS = DEFAULT_EXPIRY_DAYS * 24 * 60 * 60
 
 class RoleExpiryTask(commands.Cog):
     """
-    处理身份组自动过期和替换的后台任务 Cog。
+    处理身份组自动过期和替换的后台任务 Cog
     """
     def __init__(self, bot):
         self.bot = bot
@@ -57,7 +57,7 @@ class RoleExpiryTask(commands.Cog):
 
             log_data = _load_assignment_log()
             if not isinstance(log_data, list):
-                logger.error("分配日志格式不正确，应为列表。跳过本次检查。")
+                logger.error("分配日志格式不正确，应为列表跳过本次检查")
                 return
 
             current_time = time.time()

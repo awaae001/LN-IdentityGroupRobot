@@ -18,12 +18,12 @@ GUILD_ID_STR = GUILD_IDS_STR  # 保持向后兼容
 ADMIN_USER_IDS_STR = os.getenv('ADMIN_USER_IDS', '')
 ADMIN_USER_IDS = [uid.strip() for uid in ADMIN_USER_IDS_STR.split(',') if uid.strip()]
 if not ADMIN_USER_IDS:
-    logger.warning("环境变量 'ADMIN_USER_IDS' 未设置或为空，将使用空列表。")
+    logger.warning("环境变量 'ADMIN_USER_IDS' 未设置或为空，将使用空列表")
     
 AUTHORIZED_ROLE_IDS_STR = os.getenv('AUTHORIZED_ROLE_IDS', '')
 AUTHORIZED_ROLE_IDS = [rid.strip() for rid in AUTHORIZED_ROLE_IDS_STR.split(',') if rid.strip()]
 if not AUTHORIZED_ROLE_IDS:
-    logger.warning("环境变量 'AUTHORIZED_ROLE_IDS' 未设置或为空，将使用空列表。")
+    logger.warning("环境变量 'AUTHORIZED_ROLE_IDS' 未设置或为空，将使用空列表")
 
 # 日志频道配置
 LOG_CHANNEL_ID = os.getenv('LOG_CHANNEL_ID')  
@@ -55,13 +55,13 @@ try:
             role_id = int(role_id_str)
             REPLACEMENT_ROLES[guild_id] = role_id
         except ValueError:
-            logger.warning(f"无法解析 REPLACEMENT_ROLES 中的条目: Guild ID '{guild_id_str}' 或 Role ID '{role_id_str}' 不是有效的整数。已跳过此条目。")
+            logger.warning(f"无法解析 REPLACEMENT_ROLES 中的条目: Guild ID '{guild_id_str}' 或 Role ID '{role_id_str}' 不是有效的整数已跳过此条目")
     if not REPLACEMENT_ROLES:
-        logger.warning("未从环境变量 'REPLACEMENT_ROLES' 加载任何有效的替换身份组配置。自动替换功能可能无法正常工作。请确保其格式为有效的 JSON，例如：'{\"guild_id1\": \"role_id1\", \"guild_id2\": \"role_id2\"}'")
+        logger.warning("未从环境变量 'REPLACEMENT_ROLES' 加载任何有效的替换身份组配置自动替换功能可能无法正常工作请确保其格式为有效的 JSON，例如：'{\"guild_id1\": \"role_id1\", \"guild_id2\": \"role_id2\"}'")
     else:
-        logger.info(f"成功加载 {len(REPLACEMENT_ROLES)} 条替换身份组配置。")
+        logger.info(f"成功加载 {len(REPLACEMENT_ROLES)} 条替换身份组配置")
 
 except json.JSONDecodeError:
-    logger.error("环境变量 'REPLACEMENT_ROLES' 包含无效的 JSON 字符串。请检查 .env 文件。自动替换功能将无法工作。")
+    logger.error("环境变量 'REPLACEMENT_ROLES' 包含无效的 JSON 字符串请检查 .env 文件自动替换功能将无法工作")
 except Exception as e:
     logger.error(f"加载 REPLACEMENT_ROLES 时发生未知错误: {e}", exc_info=True)
