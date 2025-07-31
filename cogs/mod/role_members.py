@@ -5,6 +5,7 @@ import os
 import asyncio
 from discord.ui import View, Select, Modal, TextInput
 from config import LOG_CHANNEL_ID
+from utils.progress_utils import create_progress_bar
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +121,19 @@ class RoleActionSelect(Select):
                     await interaction.response.send_message("❌ 只有命令发起者可以确认操作", ephemeral=True)
                     return
                 
+                await interaction.response.defer()
                 failed = []
-                logger.info(f"开始批量移除身份组 {self.role_id} 下的成员 (共 {len(self.members)} 人)")
+                total_members = len(self.members)
+                processed_count = 0
+                logger.info(f"开始批量移除身份组 {self.role_id} 下的成员 (共 {total_members} 人)")
+
+                progress_embed = discord.Embed(
+                    title=f"正在移除身份组: {role.name}",
+                    description=create_progress_bar(0, total_members),
+                    color=discord.Color.blue()
+                )
+                progress_message = await interaction.followup.send(embed=progress_embed, wait=True)
+
                 for member in self.members:
                     try:
                         await member.remove_roles(role, reason=f"通过命令移除身份组 {self.role_id}")
@@ -129,6 +141,14 @@ class RoleActionSelect(Select):
                     except Exception as e:
                         logger.error(f"移除成员 {member.display_name} ({member.id}) 身份组失败: {str(e)}")
                         failed.append(f"{member.display_name} ({member.id})")
+                    
+                    processed_count += 1
+                    if processed_count % 5 == 0 or processed_count == total_members:
+                        progress_embed.description = create_progress_bar(processed_count, total_members)
+                        await progress_message.edit(embed=progress_embed)
+                        await asyncio.sleep(0.5)
+
+                await progress_message.delete()
                 
                 msg = f"已尝试移除身份组 <@&{self.role_id}> 下的所有成员\n"
                 if failed:
@@ -136,7 +156,7 @@ class RoleActionSelect(Select):
                 else:
                     msg += "全部成员移除成功"
                 
-                await interaction.response.send_message(msg)
+                await interaction.followup.send(msg)
                 # 日志频道记录
                 extra_lines = [
                     f"批量移除身份组成员数: {len(self.members)}",
@@ -210,11 +230,21 @@ class RoleActionSelect(Select):
                         async def do_replace():
                             failed_remove = []
                             failed_add = []
-                            logger.info(f"开始批量替换身份组 {self.role_id} -> {self.new_role_id.value} (共 {len(self.members)} 人)")
+                            total_members = len(self.members)
+                            processed_count = 0
+                            logger.info(f"开始批量替换身份组 {self.role_id} -> {self.new_role_id.value} (共 {total_members} 人)")
+
+                            progress_embed = discord.Embed(
+                                title=f"正在替换身份组: {role.name} -> {new_role.name}",
+                                description=create_progress_bar(0, total_members),
+                                color=discord.Color.blue()
+                            )
+                            progress_message = await modal_interaction.channel.send(embed=progress_embed)
+
                             for member in self.members:
                                 try:
                                     await member.remove_roles(
-                                        role, 
+                                        role,
                                         reason=f"通过命令替换身份组 {self.role_id} -> {self.new_role_id.value}"
                                     )
                                     logger.info(f"成功移除成员 {member.display_name} ({member.id}) 的原身份组")
@@ -223,13 +253,21 @@ class RoleActionSelect(Select):
                                     failed_remove.append(f"{member.display_name} ({member.id})")
                                 try:
                                     await member.add_roles(
-                                        new_role, 
+                                        new_role,
                                         reason=f"通过命令替换身份组 {self.role_id} -> {self.new_role_id.value}"
                                     )
                                     logger.info(f"成功为成员 {member.display_name} ({member.id}) 添加新身份组")
                                 except Exception as e:
                                     logger.error(f"为成员 {member.display_name} ({member.id}) 添加新身份组失败: {str(e)}")
                                     failed_add.append(f"{member.display_name} ({member.id})")
+                                
+                                processed_count += 1
+                                if processed_count % 5 == 0 or processed_count == total_members:
+                                    progress_embed.description = create_progress_bar(processed_count, total_members)
+                                    await progress_message.edit(embed=progress_embed)
+                                    await asyncio.sleep(0.5)
+                           
+                            await progress_message.delete()
                             
                             # 准备结果消息
                             msg = f"已完成将身份组 <@&{self.role_id}> 下的成员替换为 <@&{self.new_role_id.value}>\n"

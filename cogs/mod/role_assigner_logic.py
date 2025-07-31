@@ -8,6 +8,8 @@ import json
 import os
 import random
 from datetime import datetime
+from utils.progress_utils import create_progress_bar
+import asyncio
 
 logger = logging.getLogger('discord_bot.cogs.role_assigner_logic')
 
@@ -302,6 +304,16 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
     all_log_entries = []
 
     # 在所有服务器中分配身份组
+    total_users = len(user_ids)
+    processed_users = 0
+
+    progress_embed = discord.Embed(
+        title="身份组分配处理中...",
+        description=create_progress_bar(0, total_users),
+        color=discord.Color.blue()
+    )
+    progress_message = await interaction.channel.send(embed=progress_embed)
+
     for g in all_guilds:
         # 获取当前服务器的角色
         current_roles = []
@@ -352,6 +364,12 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
             except Exception as e:
                 failed_users.append(f'{g.name}: {user_id} (未知错误: {e})')
                 logger.error(f'在服务器 {g.name} 为 ID 为 {user_id} 的用户分配身份组时发生未知错误: {e}', exc_info=True)
+            
+            processed_users += 1
+            if processed_users % 5 == 0 or processed_users == total_users: # 每5个用户更新一次或在最后更新
+                progress_embed.description = create_progress_bar(processed_users, total_users)
+                await progress_message.edit(embed=progress_embed)
+                await asyncio.sleep(0.5) # 防止速率限制
 
         if successfully_assigned_ids:
             all_log_entries.append({
@@ -366,6 +384,8 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
         
         all_assigned.extend(assigned_users)
         all_failed.extend(failed_users)
+    
+    await progress_message.delete()
 
     # 保存所有分配日志
     # 保存或更新分配日志
@@ -431,7 +451,7 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
         if len(all_assigned) > 50 or len(all_failed) > 20:
             summary = discord.Embed(
                 title="跨服务器身份组分配完成",
-                description=f"成功: {len(all_assigned)}, 失败: {len(all_failed)}\n详情请查看机器人控制台日志",
+                description=f"**操作ID**: `{operation_id}`\n成功: {len(all_assigned)}, 失败: {len(all_failed)}\n详情请查看机器人控制台日志",
                 color=discord.Color.green()
             )
             await interaction.channel.send(embed=summary)
@@ -445,6 +465,7 @@ async def handle_assign_roles(interaction: Interaction, role_id_str: str = None,
         # 构建详细embeds
         success_embed = discord.Embed(
             title="跨服务器身份组分配 - 成功情况",
+            description=f"**操作ID**: `{operation_id}`",
             color=discord.Color.green()
         )
         
