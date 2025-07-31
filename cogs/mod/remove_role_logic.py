@@ -4,17 +4,25 @@ import json
 import logging
 from discord import Interaction, SelectOption
 from discord.ui import Select, View
+from .remove_role_state import save_panel_state, load_panel_state
 
 logger = logging.getLogger('discord_bot.cogs.remove_role')
 
 class RemoveRoleSelectView(View):
-    def __init__(self, roles: list[discord.Role], persist_list: bool = False):
+    def __init__(self, roles: list[discord.Role], persist_list: bool = False, custom_id_suffix: str = ""):
         super().__init__(timeout=None)
         self.roles = roles
         self.persist_list = persist_list
+        
+        # 构建唯一的 custom_id
+        # 基础 ID: "remove_role_select"
+        # 后缀: 通常是消息 ID，例如 ":1234567890"
+        # 最终 custom_id: "remove_role_select:1234567890"
+        base_custom_id = "remove_role_select"
+        final_custom_id = f"{base_custom_id}{custom_id_suffix}"
 
         options = [
-            SelectOption(label=role.name, value=str(role.id), description=f"点击移除身份组: {role.name}")
+            SelectOption(label=getattr(role, 'name', f'ID: {role.id}'), value=str(role.id), description=f"点击移除身份组: {getattr(role, 'name', f'ID: {role.id}')}")
             for role in self.roles
         ]
         
@@ -23,12 +31,24 @@ class RemoveRoleSelectView(View):
             min_values=1,
             max_values=1,
             options=options,
-            custom_id="remove_role_select"
+            custom_id=final_custom_id
         )
         select.callback = self.select_callback
         self.add_item(select)
 
     async def select_callback(self, interaction: Interaction):
+        # 从交互中获取消息 ID
+        message_id = interaction.message.id
+        
+        # 加载此面板的状态
+        panel_state = load_panel_state(message_id)
+        if not panel_state:
+            await interaction.response.send_message("错误：找不到此面板的状态信息，可能已被删除或已过期。", ephemeral=True)
+            logger.warning(f"无法为消息 ID {message_id} 加载面板状态。")
+            return
+
+        persist_list = panel_state.get('persist_list', False)
+        
         selected_role_id = int(interaction.data['values'][0])
         guild = interaction.guild
         role = guild.get_role(selected_role_id)
@@ -36,6 +56,12 @@ class RemoveRoleSelectView(View):
 
         if not role:
             await interaction.response.send_message("选择的身份组不存在或已被删除", ephemeral=True)
+            return
+
+        # 确认所选角色是否是此面板的一部分
+        if role.id not in panel_state.get('role_ids', []):
+            await interaction.response.send_message("错误：无效的选择。", ephemeral=True)
+            logger.warning(f"用户 {member.name} 尝试从未经授权的面板 (msg_id: {message_id}) 移除角色 (role_id: {role.id})")
             return
 
         if role not in member.roles:
@@ -54,7 +80,7 @@ class RemoveRoleSelectView(View):
                 extra_lines=[f"身份组名: {role.name}"]
             )
 
-            if self.persist_list:
+            if persist_list:
                 self.persist_user_removal(role, member)
 
         except discord.Forbidden:
@@ -95,6 +121,7 @@ async def handle_remove_role(interaction: Interaction, role_ids_str: str, persis
     role_id_list = [rid.strip() for rid in role_ids_str.split(',')]
     roles = []
     invalid_ids = []
+    role_ids_for_state = []
 
     for role_id_str in role_id_list:
         try:
@@ -102,6 +129,7 @@ async def handle_remove_role(interaction: Interaction, role_ids_str: str, persis
             role = interaction.guild.get_role(role_id)
             if role:
                 roles.append(role)
+                role_ids_for_state.append(role.id)
             else:
                 invalid_ids.append(role_id_str)
         except ValueError:
@@ -111,7 +139,11 @@ async def handle_remove_role(interaction: Interaction, role_ids_str: str, persis
         await interaction.response.send_message(f"提供的所有ID均无效或找不到对应的身份组: {', '.join(invalid_ids)}", ephemeral=True)
         return
 
+    # 延迟响应，以获得更长的处理时间并能够发送 followup 消息
+    await interaction.response.defer(ephemeral=True, thinking=True)
+
     if invalid_ids:
+        # 发送一个临时的警告消息
         await interaction.followup.send(f"警告：以下ID无效或未找到: {', '.join(invalid_ids)}", ephemeral=True)
 
     embed = discord.Embed(
@@ -121,8 +153,28 @@ async def handle_remove_role(interaction: Interaction, role_ids_str: str, persis
     )
     embed.set_footer(text="枫叶 丨 身份组移除")
 
-    view = RemoveRoleSelectView(roles, persist_list)
-    await interaction.response.send_message(embed=embed, view=view)
+    view = RemoveRoleSelectView(roles, persist_list, custom_id_suffix="")
+    
+    # 发送一个占位消息，以便稍后编辑并添加正确的视图
+    try:
+        # 先用一个不带 view 的 embed 发送，获取 message 对象
+        public_message = await interaction.channel.send(embed=embed)
+        message_id = public_message.id
+    except discord.Forbidden:
+        await interaction.followup.send("错误：机器人没有在此频道发送消息的权限。", ephemeral=True)
+        return
+    except Exception as e:
+        await interaction.followup.send(f"错误：发送面板时发生未知问题: {e}", ephemeral=True)
+        logger.error(f"发送移除角色面板时出错: {e}", exc_info=True)
+        return
+
+    # 现在我们有了 message_id，可以创建带有正确 custom_id 的视图
+    final_view = RemoveRoleSelectView(roles, persist_list, custom_id_suffix=f":{message_id}")
+
+    # 保存状态
+    save_panel_state(message_id, role_ids_for_state, persist_list)
+    await public_message.edit(embed=embed, view=final_view)
+    await interaction.edit_original_response(content="移除角色面板已成功创建！")
 
 
 async def send_remove_role_log(interaction, role_id, action_desc, extra_lines=None):

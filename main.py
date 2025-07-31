@@ -4,6 +4,7 @@ import logging
 import config # 导入配置模块
 import os # 用于处理路径
 from cogs.mod.remove_role_logic import RemoveRoleSelectView
+from cogs.mod.remove_role_state import load_all_panel_states
 from cogs.ui.identity_group_view import IdentityGroupView
 from cogs.ui.role_distributor_view import RoleDistributorView
 from cogs.ui.role_auto_apply_view import RoleAutoApplyView
@@ -81,8 +82,34 @@ async def setup_hook():
             logger.error(f'加载 Cog "{cog_name}" 时发生未知错误: {e}', exc_info=True)
     
     # 在 cogs 加载后注册持久化视图
-    bot.add_view(RemoveRoleSelectView(roles=[]))
-    logger.info("成功注册 RemoveRoleSelectView 持久化视图")
+    # 为自助移除角色面板重新注册视图
+    logger.info("正在重新注册 RemoveRoleSelectView 持久化视图...")
+    all_panels = load_all_panel_states()
+    if not all_panels:
+        # 即使没有已保存的面板，也注册一个空的，以防万一
+        bot.add_view(RemoveRoleSelectView(roles=[], persist_list=False, custom_id_suffix=""))
+    else:
+        for message_id, panel_data in all_panels.items():
+            # 注意：这里的 roles 应该是 discord.Role 对象列表，但我们只有 role_ids。
+            # 在视图的 select_callback 中，我们将从 guild 中获取完整的 Role 对象。
+            # 这里的关键是 custom_id 必须唯一且可预测。
+            # 我们将 message_id 作为 custom_id 的一部分，以确保唯一性。
+            role_ids = panel_data.get('role_ids', [])
+            persist_list = panel_data.get('persist_list', False)
+            
+            # 创建一个临时的 Role 对象列表，仅包含 ID，用于初始化
+            # 这不是最佳实践，但可以在不异步获取 guild 的情况下工作
+            # 更好的方法是在 callback 中处理
+            temp_roles = [discord.Object(id=rid) for rid in role_ids]
+
+            view = RemoveRoleSelectView(
+                roles=temp_roles,
+                persist_list=persist_list,
+                custom_id_suffix=f":{message_id}"
+            )
+            bot.add_view(view)
+            logger.info(f"已为消息 {message_id} 重新注册 RemoveRoleSelectView")
+    
     bot.add_view(IdentityGroupView())
     logger.info("成功注册 IdentityGroupView 持久化视图")
     bot.add_view(RoleDistributorView())
