@@ -16,6 +16,8 @@ from .mod.remove_role_logic import handle_remove_role
 from .ui.identity_group_view import IdentityGroupView
 from .ui.role_distributor_view import RoleDistributorView
 from .ui.role_auto_apply_view import RoleAutoApplyView, ApplyModal
+from .logic.role_mapping_logic import RoleMappingLogic
+from typing import List
 
 logger = logging.getLogger('discord_bot.cogs.role_assigner')
 
@@ -394,6 +396,75 @@ class RoleAssigner(commands.Cog):
                 logger.error(f"尝试发送后续错误消息失败，交互已响应: {e_followup}")
         except Exception as e_send:
             logger.error(f"发送错误消息时发生意外错误: {e_send}")
+
+
+    async def group_id_autocomplete(self, interaction: Interaction, current: str) -> List[app_commands.Choice[str]]:
+        """为 group_id 提供自动完成选项"""
+        logic_cog: RoleMappingLogic = self.bot.get_cog("RoleMappingLogic")
+        if not logic_cog:
+            return []
+        
+        groups = logic_cog.get_all_group_ids()
+        return [
+            app_commands.Choice(name=f"{group['name']} ({group['id']})", value=group['id'])
+            for group in groups if current.lower() in group['name'].lower() or current in group['id']
+        ][:25]
+
+    async def role_id_autocomplete(self, interaction: Interaction, current: str) -> List[app_commands.Choice[str]]:
+        """根据选择的 group_id 为 role_id 提供自动完成选项"""
+        group_id = interaction.namespace.group_id
+        if not group_id:
+            return []
+
+        logic_cog: RoleMappingLogic = self.bot.get_cog("RoleMappingLogic")
+        if not logic_cog:
+            return []
+
+        roles = logic_cog.get_roles_in_group(group_id)
+        return [
+            app_commands.Choice(name=f"{role['name']} ({role['id']})", value=role['id'])
+            for role in roles if current.lower() in role['name'].lower() or current in role['id']
+        ][:25]
+
+    @app_commands.command(name="manage_role", description="管理角色映射文件")
+    @app_commands.guilds(*[discord.Object(id=gid) for gid in config.GUILD_IDS])
+    @app_commands.describe(
+        action="选择要执行的操作 (添加或删除)",
+        group_id="目标组的ID",
+        role_id="目标角色的ID",
+        role_name="要添加的角色的名称 (仅在添加时需要)"
+    )
+    @app_commands.choices(action=[
+        app_commands.Choice(name="添加 (add)", value="add"),
+        app_commands.Choice(name="删除 (remove)", value="remove"),
+    ])
+    @app_commands.autocomplete(group_id=group_id_autocomplete, role_id=role_id_autocomplete)
+    @is_authorized()
+    async def manage_role(self, interaction: Interaction, action: str, group_id: str, role_id: str, role_name: str = None):
+        """处理角色映射的添加和删除"""
+        await interaction.response.defer(ephemeral=True)
+
+        logic_cog: RoleMappingLogic = self.bot.get_cog("RoleMappingLogic")
+        if not logic_cog:
+            await interaction.followup.send("错误: RoleMappingLogic 未加载。", ephemeral=True)
+            return
+
+        if action == "add":
+            if not role_name:
+                await interaction.followup.send("错误: 添加操作需要提供 `role_name`。", ephemeral=True)
+                return
+            success, message = await logic_cog.add_role(group_id, role_id, role_name)
+            title = "添加角色映射"
+        elif action == "remove":
+            success, message = await logic_cog.remove_role(group_id, role_id)
+            title = "移除角色映射"
+        else:
+            await interaction.followup.send("错误: 无效的操作。", ephemeral=True)
+            return
+
+        color = discord.Color.green() if success else discord.Color.red()
+        embed = discord.Embed(title=title, description=message, color=color)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

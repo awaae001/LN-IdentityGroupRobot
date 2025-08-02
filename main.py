@@ -62,6 +62,7 @@ async def setup_hook():
         'cogs.commands',
         'cogs.logic.identity_group_logic',
         'cogs.logic.role_distributor_logic',
+        'cogs.logic.role_mapping_logic',
         'cogs.tasks.role_expiry',
         'cogs.tasks.user_role_formatter',
     ]
@@ -90,16 +91,11 @@ async def setup_hook():
         bot.add_view(RemoveRoleSelectView(roles=[], persist_list=False, custom_id_suffix=""))
     else:
         for message_id, panel_data in all_panels.items():
-            # 注意：这里的 roles 应该是 discord.Role 对象列表，但我们只有 role_ids。
-            # 在视图的 select_callback 中，我们将从 guild 中获取完整的 Role 对象。
-            # 这里的关键是 custom_id 必须唯一且可预测。
             # 我们将 message_id 作为 custom_id 的一部分，以确保唯一性。
             role_ids = panel_data.get('role_ids', [])
             persist_list = panel_data.get('persist_list', False)
             
             # 创建一个临时的 Role 对象列表，仅包含 ID，用于初始化
-            # 这不是最佳实践，但可以在不异步获取 guild 的情况下工作
-            # 更好的方法是在 callback 中处理
             temp_roles = [discord.Object(id=rid) for rid in role_ids]
 
             view = RemoveRoleSelectView(
